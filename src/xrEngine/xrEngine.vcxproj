@@ -1213,6 +1213,9 @@
       <Project>{57A498C9-A741-4DDF-8EFC-BFB9EB6B00E2}</Project>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="message.txt" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
