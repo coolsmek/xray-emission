@@ -3,6 +3,9 @@
 !.gitignore
 !.gitattributes
 
+#exclude development docs
+dev-docs/
+
 # exclude binaries and temporary files
 _build/
 /src/*.tss
