@@ -10,6 +10,8 @@
 #if defined(USE_DX10) || defined(USE_DX11)
 #include "../xrRenderDX10/dx10R_Backend_Runtime.h"
 #include "../xrRenderDX10/StateManager/dx10State.h"
+#elif defined(USE_VK)
+// Vulkan has no legacy state machine — runtime state is managed via pipeline objects
 #else	//	USE_DX10
 #include "../xrRenderDX9/dx9R_Backend_Runtime.h"
 #endif	//	USE_DX10
@@ -50,40 +52,40 @@ IC void R_xforms::set_c_wvp(R_constant* C)
 	RCache.set_c(C, m_wvp);
 };
 
-IC void R_xforms::set_c_w_prev(R_constant* C) 
-{ 
-	c_w_prev = C; 
-	RCache.set_c(C, m_w_prev); 
+IC void R_xforms::set_c_w_prev(R_constant* C)
+{
+	c_w_prev = C;
+	RCache.set_c(C, m_w_prev);
 };
 
-IC void R_xforms::set_c_v_prev(R_constant* C) 
-{ 
-	c_v_prev = C; 
-	RCache.set_c(C, m_v_prev); 
+IC void R_xforms::set_c_v_prev(R_constant* C)
+{
+	c_v_prev = C;
+	RCache.set_c(C, m_v_prev);
 };
 
-IC void R_xforms::set_c_p_prev(R_constant* C) 
-{ 
-	c_p_prev = C; 
-	RCache.set_c(C, m_p_prev); 
+IC void R_xforms::set_c_p_prev(R_constant* C)
+{
+	c_p_prev = C;
+	RCache.set_c(C, m_p_prev);
 };
 
-IC void R_xforms::set_c_wv_prev(R_constant* C) 
-{ 
-	c_wv_prev = C; 
-	RCache.set_c(C, m_wv_prev); 
+IC void R_xforms::set_c_wv_prev(R_constant* C)
+{
+	c_wv_prev = C;
+	RCache.set_c(C, m_wv_prev);
 };
 
-IC void R_xforms::set_c_vp_prev(R_constant* C) 
-{ 
-	c_vp_prev = C; 
-	RCache.set_c(C, m_vp_prev); 
+IC void R_xforms::set_c_vp_prev(R_constant* C)
+{
+	c_vp_prev = C;
+	RCache.set_c(C, m_vp_prev);
 };
 
-IC void R_xforms::set_c_wvp_prev(R_constant* C) 
-{ 
-	c_wvp_prev = C; 
-	RCache.set_c(C, m_wvp_prev); 
+IC void R_xforms::set_c_wvp_prev(R_constant* C)
+{
+	c_wvp_prev = C;
+	RCache.set_c(C, m_wvp_prev);
 };
 
 IC void CBackend::set_xform_world(const Fmatrix& M)

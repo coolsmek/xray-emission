@@ -110,9 +110,9 @@ public:
 #	endif
 	D3D_PRIMITIVE_TOPOLOGY m_PrimitiveTopology;
 	ID3DInputLayout* m_pInputLayout;
-	DWORD dummy0; //	Padding to avoid warning	
-	DWORD dummy1; //	Padding to avoid warning	
-	DWORD dummy2; //	Padding to avoid warning	
+	DWORD dummy0; //	Padding to avoid warning
+	DWORD dummy1; //	Padding to avoid warning
+	DWORD dummy2; //	Padding to avoid warning
 #endif
 private:
 	// Render-targets
@@ -431,7 +431,7 @@ public:
 	// Debug render
 	void dbg_DP(D3DPRIMITIVETYPE pt, ref_geom geom, u32 vBase, u32 pc);
 	void dbg_DIP(D3DPRIMITIVETYPE pt, ref_geom geom, u32 baseV, u32 startV, u32 countV, u32 startI, u32 PC);
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	//	TODO: DX10: Implement this.
 	IC void dbg_SetRS(D3DRENDERSTATETYPE p1, u32 p2)
 	{

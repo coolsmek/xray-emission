@@ -46,25 +46,25 @@ void __cdecl dummy(void)
 #pragma comment(lib, "vfw32.lib")
 #pragma comment(lib, "nvapi.lib")
 
-#if !defined(STATIC_RENDERER_R1) && !defined(STATIC_RENDERER_R2) && !defined(STATIC_RENDERER_R3) && !defined(STATIC_RENDERER_R4)
-	#error Select one of the renderers R1, R2, R3, or R4
+#if !defined(STATIC_RENDERER_R1) && !defined(STATIC_RENDERER_R2) && !defined(STATIC_RENDERER_R3) && !defined(STATIC_RENDERER_R4) && !defined(STATIC_RENDERER_VK)
+	#error Select one of the renderers R1, R2, R3, R4, or VK
 #endif
 
 #ifdef STATIC_RENDERER_R1
-#if defined(STATIC_RENDERER_R2) || defined(STATIC_RENDERER_R3) || defined(STATIC_RENDERER_R4)
+#if defined(STATIC_RENDERER_R2) || defined(STATIC_RENDERER_R3) || defined(STATIC_RENDERER_R4) || defined(STATIC_RENDERER_VK)
 		#error Only one of the renderers R1, R2, R3, and R4 can be selected at once
 #endif
 	#pragma comment(lib, "xrRender_R1.lib")
 	#pragma comment(lib, "d3dx9.lib")
 #endif
 #ifdef STATIC_RENDERER_R2
-#if defined(STATIC_RENDERER_R1) || defined(STATIC_RENDERER_R3) || defined(STATIC_RENDERER_R4)
+#if defined(STATIC_RENDERER_R1) || defined(STATIC_RENDERER_R3) || defined(STATIC_RENDERER_R4) || defined(STATIC_RENDERER_VK)
 		#error Only one of the renderers R1, R2, R3, and R4 can be selected at once
 #endif
 	#pragma comment(lib, "xrRender_R2.lib")
 #endif
 #ifdef STATIC_RENDERER_R3
-#if defined(STATIC_RENDERER_R1) || defined(STATIC_RENDERER_R2) || defined(STATIC_RENDERER_R4)
+#if defined(STATIC_RENDERER_R1) || defined(STATIC_RENDERER_R2) || defined(STATIC_RENDERER_R4) || defined(STATIC_RENDERER_VK)
 		#error Only one of the renderers R1, R2, R3, and R4 can be selected at once
 #endif
 #pragma comment(lib, "xrRender_R3.lib")
@@ -75,7 +75,7 @@ void __cdecl dummy(void)
 #pragma comment(lib, "dxgi.lib")
 #endif
 #ifdef STATIC_RENDERER_R4
-#if  defined(STATIC_RENDERER_R1) || defined(STATIC_RENDERER_R2) || defined(STATIC_RENDERER_R3)
+#if  defined(STATIC_RENDERER_R1) || defined(STATIC_RENDERER_R2) || defined(STATIC_RENDERER_R3) || defined(STATIC_RENDERER_VK)
 		#error Only one of the renderers R1, R2, R3, and R4 can be selected at once
 #endif
 	#pragma comment(lib, "xrRender_R4.lib")
@@ -85,6 +85,14 @@ void __cdecl dummy(void)
 	#pragma comment(lib, "d3d11.lib")
 	#pragma comment(lib, "dxgi.lib")
 	#pragma comment(lib, "d3d10.lib")
+#endif
+
+#ifdef STATIC_RENDERER_VK
+    #if defined(STATIC_RENDERER_R1) || defined(STATIC_RENDERER_R2) || defined(STATIC_RENDERER_R3) || defined(STATIC_RENDERER_R4)
+        #error Only one of the renderers R1, R2, R3, R4, or VK can be selected at once
+#endif
+    #pragma comment(lib, "xrRenderVK.lib")
+    #pragma comment(lib, "vulkan-1.lib")
 #endif
 
 CEngineAPI::CEngineAPI()
@@ -125,6 +133,7 @@ extern BOOL DllMainXrRenderR1(HANDLE hModule, DWORD ul_reason_for_call, LPVOID l
 extern BOOL DllMainXrRenderR2(HANDLE hModule, DWORD ul_reason_for_call, LPVOID lpReserved);
 extern BOOL DllMainXrRenderR3(HANDLE hModule, DWORD ul_reason_for_call, LPVOID lpReserved);
 extern BOOL DllMainXrRenderR4(HANDLE hModule, DWORD ul_reason_for_call, LPVOID lpReserved);
+extern BOOL DllMainXrRenderVK(HANDLE hModule, DWORD ul_reason_for_call, LPVOID lpReserved);
 
 #ifdef STATIC_RENDERER_R1
 	#define DLL_MAIN_RENDERER DllMainXrRenderR1
@@ -138,12 +147,29 @@ extern BOOL DllMainXrRenderR4(HANDLE hModule, DWORD ul_reason_for_call, LPVOID l
 #ifdef STATIC_RENDERER_R4
 	#define DLL_MAIN_RENDERER DllMainXrRenderR4
 #endif
+#ifdef STATIC_RENDERER_VK
+	#define DLL_MAIN_RENDERER DllMainXrRenderVK
+#endif
 
 void CEngineAPI::InitializeNotDedicated()
 {
 	LPCSTR r2_name = "xrRender_R2.dll";
 	LPCSTR r3_name = "xrRender_R3.dll";
 	LPCSTR r4_name = "xrRender_R4.dll";
+	LPCSTR vk_name = "xrRenderVK.dll";
+
+#ifdef STATIC_RENDERER_VK
+    {
+        // Vulkan renderer — takes priority, disables all DX paths
+        psDeviceFlags.set(rsR2, FALSE);
+        psDeviceFlags.set(rsR3, FALSE);
+        psDeviceFlags.set(rsR4, FALSE);
+        Log("Loading DLL:", vk_name);
+        DllMainXrRenderVK(NULL, DLL_PROCESS_ATTACH, NULL);
+        g_current_renderer = 5; // R_VK
+    }
+#endif
+
 #ifdef STATIC_RENDERER_R4
 	//if (psDeviceFlags.test(rsR4))
     {
@@ -293,6 +319,7 @@ extern "C" {
 typedef bool __cdecl SupportsAdvancedRenderingREF(void);
 typedef bool /*_declspec(dllexport)*/ SupportsDX10RenderingREF();
 typedef bool /*_declspec(dllexport)*/ SupportsDX11RenderingREF();
+typedef bool SupportsVKRenderingREF();
 };
 
 extern "C" {
@@ -305,6 +332,9 @@ bool /*_declspec(dllexport)*/ SupportsDX10Rendering();
 #endif
 #ifdef STATIC_RENDERER_R4
 	bool /*_declspec(dllexport)*/ SupportsDX11Rendering();
+#endif
+#ifdef STATIC_RENDERER_VK
+	bool SupportsVKRendering();
 #endif
 };
 
@@ -418,6 +448,20 @@ void CEngineAPI::CreateRendererList()
 #ifdef STATIC_RENDERER_R4
 	if (proceed &= bSupports_r4, proceed)
         _tmp.push_back("renderer_r4");
+#endif
+
+#ifdef STATIC_RENDERER_VK
+	{
+		bool bSupports_vk = false;
+		LPCSTR vk_name = "xrRenderVK.dll";
+		Log("Loading DLL:", vk_name);
+		DllMainXrRenderVK(NULL, DLL_PROCESS_ATTACH, NULL);
+		SupportsVKRenderingREF* test_vk_rendering = SupportsVKRendering;
+		R_ASSERT(test_vk_rendering);
+		bSupports_vk = test_vk_rendering();
+		if (bSupports_vk)
+			_tmp.push_back("renderer_vk");
+	}
 #endif
 
 	R_ASSERT2(_tmp.size() != 0, "No valid renderer found, please use a render system that's supported by your PC");
