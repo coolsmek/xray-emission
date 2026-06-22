@@ -5,7 +5,6 @@
 
 #include "stdafx.h"
 #include "Weapon.h"
-#include "ParticlesObject.h"
 #include "entity_alive.h"
 #include "inventory_item_impl.h"
 #include "inventory.h"
@@ -217,10 +216,10 @@ void CWeapon::UpdateXForm()
 		boneL = boneR2;
 
 	V->CalculateBones_Invalidate();
-	V->CalculateBones(TRUE);
+	// V->CalculateBones(TRUE);
 
-	Fmatrix& mL = V->LL_GetTransform(u16(boneL));
-	Fmatrix& mR = V->LL_GetTransform(u16(boneR));
+	Fmatrix& mL = V->LL_GetTransform_safed(u16(boneL));
+	Fmatrix& mR = V->LL_GetTransform_safed(u16(boneR));
 	// Calculate
 	Fmatrix mRes;
 	Fvector R, D, N;
@@ -1202,6 +1201,7 @@ void CWeapon::OnEvent(NET_Packet& P, u16 type)
 
 void CWeapon::shedule_Update(u32 dT)
 {
+	PROF_EVENT("CWeapon::shedule_Update");
 	// Queue shrink
 	//	u32	dwTimeCL		= Level().timeServer()-NET_Latency;
 	//	while ((NET.size()>2) && (NET[1].dwTimeStamp<dwTimeCL)) NET.pop_front();
@@ -1242,12 +1242,14 @@ void CWeapon::OnH_A_Independent()
 	inherited::OnH_A_Independent();
 	Light_Destroy();
 	UpdateAddonsVisibility();
+	//Engine.Sheduler.Register(this);
 };
 
 void CWeapon::OnH_A_Chield()
 {
 	inherited::OnH_A_Chield();
 	UpdateAddonsVisibility();
+	//Engine.Sheduler.Unregister(this);
 };
 
 void CWeapon::OnActiveItem()
@@ -1261,7 +1263,7 @@ void CWeapon::OnActiveItem()
 	//-
 
 	inherited::OnActiveItem();
-	//åñëè ìû çàíðóæàåìñÿ è îðóæèå áûëî â ðóêàõ
+	//если мы заряжаемся и оружие было в руках
 	//.	SetState					(eIdle);
 	//.	SetNextState				(eIdle);
 }
@@ -1404,20 +1406,20 @@ bool CWeapon::need_renderable()
 	return !Device.m_SecondViewport.IsSVPFrame() && !(IsZoomed() && ZoomTexture() && !IsRotatingToZoom());
 }
 
-void CWeapon::renderable_Render()
+void CWeapon::renderable_Render(IDSGraphManager* DM)
 {
-	UpdateXForm();
+	//UpdateXForm();
 
-	//íàðèñîâàòü ïîäñâåòêó
-	RenderLight();
-
-	//åñëè ìû â ðåæèìå ñíàéïåðêè, òî ñàì HUD ðèñîâàòü íå íàäî
+	//если мы в режиме снайперки, то сам HUD рисовать не надо
 	if (IsZoomed() && !IsRotatingToZoom() && ZoomTexture())
 		RenderHud(FALSE);
 	else
 		RenderHud(TRUE);
 
-	inherited::renderable_Render();
+	inherited::renderable_Render(DM);
+
+	//нарисовать подсветку
+	RenderLight();
 }
 
 void CWeapon::signal_HideComplete()
@@ -1757,21 +1759,35 @@ float CWeapon::GetConditionMisfireProbability() const
 	// modified by Peacemaker [17.10.08]
 	//	if(GetCondition() > 0.95f)
 	//		return 0.0f;
+    float result = 0.0f;
 	if (GetCondition() > misfireStartCondition)
-		return 0.0f;
-	if (GetCondition() < misfireEndCondition)
-		return misfireEndProbability;
-	//	float mis = misfireProbability+powf(1.f-GetCondition(), 3.f)*misfireConditionK;
-	float mis = misfireStartProbability + (
-		(misfireStartCondition - GetCondition()) * // condition goes from 1.f to 0.f
-		(misfireEndProbability - misfireStartProbability) / // probability goes from 0.f to 1.f
-		((misfireStartCondition == misfireEndCondition)
-			 ? // !!!say "No" to devision by zero
-			 misfireStartCondition
-			 : (misfireStartCondition - misfireEndCondition))
-	);
-	clamp(mis, 0.0f, 0.99f);
-	return mis;
+        result = 0.0f;
+	else if (GetCondition() < misfireEndCondition)
+        result = misfireEndProbability;
+    else
+    {
+        //	float mis = misfireProbability+powf(1.f-GetCondition(), 3.f)*misfireConditionK;
+        result = misfireStartProbability + (
+            (misfireStartCondition - GetCondition()) * // condition goes from 1.f to 0.f
+            (misfireEndProbability - misfireStartProbability) / // probability goes from 0.f to 1.f
+            ((misfireStartCondition == misfireEndCondition)
+                ? // !!!say "No" to devision by zero
+                misfireStartCondition
+                : (misfireStartCondition - misfireEndCondition))
+            );
+        
+    }
+    if (!smart_cast<CActor*>(H_Parent()))
+    {
+        ::luabind::functor<float> funct;
+        if (ai().script_engine().functor("xr_weapon_jam.GetConditionMisfireProbability", funct))
+        {
+            auto gobj = smart_cast<CGameObject*>(H_Parent());
+            result = funct(lua_game_object(), gobj ? gobj->lua_game_object() : nullptr, result);
+        }
+    }
+    clamp(result, 0.0f, 1.f);
+	return result;
 }
 
 BOOL CWeapon::CheckForMisfire()
@@ -2134,8 +2150,9 @@ CUIWindow* CWeapon::ZoomTexture()
 	else
 	{
 		scope_2dtexactive = 0; //crookr
-		return NULL;
+		return nullptr;
 	}
+	//return nullptr; //UseScopeTexture() ? m_UIScope : nullptr;
 }
 
 void CWeapon::SwitchState(u32 S)
@@ -2997,6 +3014,9 @@ void CWeapon::modify_holder_params(float& range, float& fov) const
 
 bool CWeapon::render_item_ui_query()
 {
+    if (!m_pInventory)
+        return false;
+
 	bool b_is_active_item = (m_pInventory->ActiveItem() == this);
 	bool res = b_is_active_item && IsZoomed() && ZoomHideCrosshair() && ZoomTexture() && !IsRotatingToZoom();
 	return res;

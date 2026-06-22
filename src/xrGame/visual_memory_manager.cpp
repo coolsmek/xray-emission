@@ -28,6 +28,8 @@
 #include "memory_manager.h"
 #include "ai/monsters/basemonster/base_monster.h"
 
+float g_ai_vision_speed_boost = 1.0f;
+
 #ifndef MASTER_GOLD
 #	include "actor.h"
 #	include "ai_debug.h"
@@ -329,7 +331,7 @@ float CVisualMemoryManager::get_object_velocity(const CGameObject* game_object,
                                                 const CNotYetVisibleObject& not_yet_visible_object) const
 {
 	//Alundaio: no need to check velocity on anything but stalkers, mutants and actor
-	if (!smart_cast<CEntityAlive const*>(game_object))
+	if (!const_cast<CGameObject*>(game_object)->cast_entity_alive())
 		return (0.f);
 	//-Alundaio
 
@@ -363,7 +365,7 @@ float CVisualMemoryManager::get_visible_value(const CGameObject* game_object, fl
 	if (ai().script_engine().functor("visual_memory_manager.get_visible_value", funct))
 		return (funct(m_object ? m_object->lua_game_object() : 0, game_object ? game_object->lua_game_object() : 0,
 		              time_delta, current_state().m_time_quant, luminocity, current_state().m_velocity_factor,
-		              object_velocity, distance, object_distance, always_visible_distance));
+		              object_velocity, distance, object_distance, always_visible_distance)) * g_ai_vision_speed_boost;
 	//-Alundaio
 
 	return (
@@ -373,7 +375,7 @@ float CVisualMemoryManager::get_visible_value(const CGameObject* game_object, fl
 		(1.f + current_state().m_velocity_factor * object_velocity) *
 		(distance - object_distance) /
 		(distance - always_visible_distance)
-	);
+	) * g_ai_vision_speed_boost;
 }
 
 CNotYetVisibleObject* CVisualMemoryManager::not_yet_visible_object(const CGameObject* game_object)
@@ -392,7 +394,13 @@ CNotYetVisibleObject* CVisualMemoryManager::not_yet_visible_object(const CGameOb
 
 void CVisualMemoryManager::add_not_yet_visible_object(const CNotYetVisibleObject& not_yet_visible_object)
 {
-	m_not_yet_visible_objects.push_back(not_yet_visible_object);
+    xr_vector<CNotYetVisibleObject>::iterator I = std::find_if(
+        m_not_yet_visible_objects.begin(),
+        m_not_yet_visible_objects.end(),
+        CNotYetVisibleObjectPredicate(not_yet_visible_object.m_object)
+    );
+    if (I == m_not_yet_visible_objects.end())
+        m_not_yet_visible_objects.push_back(not_yet_visible_object);
 }
 
 u32 CVisualMemoryManager::get_prev_time(const CGameObject* game_object) const
@@ -672,6 +680,9 @@ void CVisualMemoryManager::remove_links(CObject* object)
 
 CVisibleObject* CVisualMemoryManager::visible_object(const CGameObject* game_object)
 {
+    if (!m_objects)
+        return nullptr;
+
 	VISIBLES::iterator I = std::find_if(m_objects->begin(), m_objects->end(), CVisibleObjectPredicateEx(game_object));
 	if (I == m_objects->end())
 		return (0);
@@ -696,8 +707,10 @@ void CVisualMemoryManager::update(float time_delta)
 
 		m_last_update_time = Device.dwTimeGlobal;
 
+        if (!m_objects)
+            return;
+
 		squad_mask_type mask = this->mask();
-		VERIFY(m_objects);
 		m_visible_objects.clear();
 
 		START_PROFILE("Memory Manager/visuals/update/feel_vision_get")

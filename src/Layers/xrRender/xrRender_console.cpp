@@ -118,7 +118,9 @@ xr_token screenshot_mode_token [ ] = {
 extern int psSkeletonUpdate;
 extern float r__dtex_range;
 
-Flags32 ps_r__common_flags = {/*RFLAG_NO_RAM_TEXTURES*/ }; // All renders
+//RFLAG_NO_RAM_TEXTURES
+//RFLAG_HOM_DYNAMIC
+Flags32 ps_r__common_flags = {0}; // All renders
 
 //int		ps_r__Supersample			= 1		;
 int ps_r__LightSleepFrames = 10;
@@ -143,7 +145,9 @@ float ps_r__GLOD_ssa_start = 256.f;
 float ps_r__GLOD_ssa_end = 64.f;
 float ps_r__LOD = 0.75f;
 //. float		ps_r__LOD_Power				=  1.5f	;
-float ps_r__ssaDISCARD = 3.5f; //RO
+float ps_r__ssaDISCARD = 7.f; //RO
+float ps_r__ssaDISCARD_exp = 0.5f; // demonized
+float ps_r__ssaDISCARD_fade_k = 4.0f; // demonized
 float ps_r__ssaDONTSORT = 32.f; //RO
 float ps_r__ssaHZBvsTEX = 96.f; //RO
 
@@ -166,6 +170,7 @@ int ps_r1_SoftwareSkinning = 0; // r1-only
 // R2
 float ps_r2_ssaLOD_A = 64.f;
 float ps_r2_ssaLOD_B = 48.f;
+BOOL ps_r2_particle_dt = FALSE;
 
 // R2-specific
 Flags32 ps_r2_ls_flags = {
@@ -248,11 +253,13 @@ float ps_r2_dhemi_sky_scale = 0.08f; // 1.5f
 float ps_r2_dhemi_light_scale = 0.2f;
 float ps_r2_dhemi_light_flow = 0.1f;
 int ps_r2_dhemi_count = 5; // 5
+int ps_r2_shadow_omnipart_vischeck = 1;
 int ps_r2_wait_sleep = 0;
 int ps_r2_qsync = 0;
 
 float ps_r2_lt_smooth = 1.f; // 1.f
 float ps_r2_slight_fade = 0.5f; // 1.f
+float ps_r2_shadow_lod_min = 0.02f;
 ///////lvutner
 Fvector4 ps_r2_mask_control = {.0f, .0f, .0f, .0f}; // r2-only
 Fvector ps_r2_drops_control = {.0f, 1.15f, .0f}; // r2-only
@@ -514,8 +521,18 @@ float ps_r2_gloss_factor = 4.0f;
 float ps_r2_gloss_min = 0.0f;
 //- Mad Max
 
+// demonized
+BOOL occq_debug = FALSE;
+BOOL r_blood_decals_on_objects = FALSE;
+
 int opt_static = 2;
 int opt_dynamic = 2;
+
+int ps_pfx_volumetric_mode = 0;
+int ps_r__portal_traverse_stats = 0;
+
+float r_rain_exp = 1.f;
+float r_rain_k = 99.0f;
 
 #ifndef _EDITOR
 #include	"../../xrEngine/xr_ioconsole.h"
@@ -1069,9 +1086,7 @@ void xrRender_initconsole()
 	CMD3(CCC_Preset, "_preset", &ps_Preset, qpreset_token);
 
 	CMD4(CCC_Integer, "rs_skeleton_update", &psSkeletonUpdate, 2, 128);
-#ifdef	DEBUG
 	CMD1(CCC_DumpResources,		"dump_resources");
-#endif	//	 DEBUG
 
 	CMD4(CCC_Float, "r__dtex_range", &r__dtex_range, 5, 175);
 
@@ -1089,8 +1104,8 @@ void xrRender_initconsole()
 	CMD4(CCC_Float,		"r__ssa_glod_end",		&ps_r__GLOD_ssa_end,		16,		96		);
 	CMD4(CCC_Float,		"r__wallmark_shift_pp",	&ps_r__WallmarkSHIFT,		0.0f,	1.f		);
 	CMD4(CCC_Float,		"r__wallmark_shift_v",	&ps_r__WallmarkSHIFT_V,		0.0f,	1.f		);
-	CMD1(CCC_ModelPoolStat,"stat_models"		);
 #endif // DEBUG
+	CMD1(CCC_ModelPoolStat,"stat_models"		);
 	CMD4(CCC_Float, "r__wallmark_ttl", &ps_r__WallmarkTTL, 1.0f, 10.f*60.f);
 
 	CMD4(CCC_Integer, "r__supersample", &ps_r__Supersample, 1, 8);
@@ -1121,9 +1136,14 @@ void xrRender_initconsole()
 	//no ram textures should be enabled by default on r3/r4
 	if (RENDER == R_R3 || RENDER == R_R4) ps_r__common_flags.set(RFLAG_NO_RAM_TEXTURES, TRUE);
 
+	CMD4(CCC_Integer, "r__occq_debug", &occq_debug, 0, 1);
+
 	CMD3(CCC_Mask, "r__no_ram_textures", &ps_r__common_flags, RFLAG_NO_RAM_TEXTURES);
+	CMD3(CCC_Mask, "r__hom_dynamic", &ps_r__common_flags, RFLAG_HOM_DYNAMIC);
 	CMD2(CCC_tf_Aniso, "r__tf_aniso", &ps_r__tf_Anisotropic); //	{1..16}
 	CMD2(CCC_tf_MipBias, "r__tf_mipbias", &ps_r__tf_Mipbias); // {-3 +3}
+
+	CMD4(CCC_Integer, "r__blood_decals_on_objects", &r_blood_decals_on_objects, 0, 1);
 
 	// R1
 	CMD4(CCC_Float, "r1_ssa_lod_a", &ps_r1_ssaLOD_A, 16, 96);
@@ -1182,13 +1202,15 @@ void xrRender_initconsole()
 
 	CMD3(CCC_Token, "r_screenshot_mode", &ps_r_screenshot_token, screenshot_mode_token);
 
+	CMD3(CCC_Mask, "r2_mt", &ps_r2_ls_flags, R2FLAG_EXP_MT_CALC);
+
 #ifdef DEBUG
 	CMD3(CCC_Mask,		"r2_use_nvdbt",			&ps_r2_ls_flags,			R2FLAG_USE_NVDBT);
-	CMD3(CCC_Mask,		"r2_mt",				&ps_r2_ls_flags,			R2FLAG_EXP_MT_CALC);
 #endif // DEBUG
 
 	CMD3(CCC_Mask, "r2_sun", &ps_r2_ls_flags, R2FLAG_SUN);
 	CMD3(CCC_Mask, "r2_sun_details", &ps_r2_ls_flags, R2FLAG_SUN_DETAILS);
+	CMD3(CCC_Mask, "r2_lights_details", &ps_r2_ls_flags, R2FLAG_LIGHTS_DETAILS);
 	CMD3(CCC_Mask, "r2_sun_focus", &ps_r2_ls_flags, R2FLAG_SUN_FOCUS);
 	//	CMD3(CCC_Mask,		"r2_sun_static",		&ps_r2_ls_flags,			R2FLAG_SUN_STATIC);
 	//	CMD3(CCC_Mask,		"r2_exp_splitscene",	&ps_r2_ls_flags,			R2FLAG_EXP_SPLIT_SCENE);
@@ -1451,12 +1473,17 @@ void xrRender_initconsole()
 
 	CMD4(CCC_Float, "particle_update_mod", &ps_particle_update_coeff, 0.04f, 10.f);
 
+    CMD4(CCC_Float, "r__rain_exp", &r_rain_exp, 0.1f, 5.f);
+    CMD4(CCC_Float, "r__rain_k", &r_rain_k, 10.f, 300.f);
+
 	// Geometry optimization
 	CMD4(CCC_Integer, "r__optimize_static_geom", &opt_static, 0, 4);
 	CMD4(CCC_Integer, "r__optimize_dynamic_geom", &opt_dynamic, 0, 4);
+	CMD4(CCC_Integer, "r__portal_traverse_stats", &ps_r__portal_traverse_stats, 0, 1);
 	psDeviceFlags2.set(rsOptShadowGeom, TRUE);
 	CMD3(CCC_Mask, "r__optimize_shadow_geom", &psDeviceFlags2, rsOptShadowGeom);
 
+	CMD4(CCC_Integer, "r2_shadow_omnipart_vischeck", &ps_r2_shadow_omnipart_vischeck, 0, 1);
 	CMD4(CCC_Integer, "r2_wait_sleep", &ps_r2_wait_sleep, 0, 1);
 	CMD4(CCC_Integer, "r2_qsync", &ps_r2_qsync, 0, 1);
 
@@ -1480,6 +1507,7 @@ void xrRender_initconsole()
 	//	CMD4(CCC_Float,		"r2_parallax_range",	&ps_r2_df_parallax_range,	5.0f,	175.0f	);
 
 	CMD4(CCC_Float, "r2_slight_fade", &ps_r2_slight_fade, .2f, 1.f);
+    CMD4(CCC_Float, "r2_shadow_lod_min", &ps_r2_shadow_lod_min, 0.f, 1.f);
 
 	tw_min.set(0, 0, 0);
 	tw_max.set(1, 1, 1);
@@ -1537,9 +1565,12 @@ void xrRender_initconsole()
 	CMD3(CCC_Token, "r3_msaa_alphatest", &ps_r3_msaa_atest, qmsaa__atest_token);
 	CMD3(CCC_Token, "r3_minmax_sm", &ps_r3_minmax_sm, qminmax_sm_token);
 
+	CMD3(CCC_Mask, "r__fast_details_update" ,&ps_r2_ls_flags, R2FLAG_FAST_DETAILS_UPDATE);
+
 #ifdef DETAIL_RADIUS
 	CMD4(CCC_detail_radius, "r__detail_radius", &ps_r__detail_radius, 0, 250);
 	CMD3(CCC_Mask, "r__clear_models_on_unload", &psDeviceFlags2, rsClearModels); //Alundaio
+	CMD3(CCC_Mask, "r__clear_resources_on_unload", &psDeviceFlags2, rsClearAllResources);
 	CMD3(CCC_Mask, "r__use_precompiled_shaders", &psDeviceFlags2, rsPrecompiledShaders); //Alundaio
 	CMD3(CCC_Mask, "r__enable_grass_shadow", &psDeviceFlags2, rsGrassShadow); //Alundaio
 	CMD3(CCC_Mask, "r__no_scale_on_fade", &psDeviceFlags2, rsNoScale); //Alundaio
@@ -1562,6 +1593,13 @@ void xrRender_initconsole()
 
 	CMD4(CCC_Vector4, "vignette_control", &ps_vignette_control, Fvector4().set(0.0f, 0.0f, 0.0f, 0.0f), Fvector4().set(1.0f, 1.0f, 1.0f, 1.0f));
 
+	CMD4(CCC_Integer, "pfx_volumetric_mode", &ps_pfx_volumetric_mode, 0, 1);
+
+    CMD4(CCC_Float, "r__ssa_discard", &ps_r__ssaDISCARD, 0.f, 50.0f);
+    CMD4(CCC_Float, "r__ssa_discard_exp", &ps_r__ssaDISCARD_exp, 0.1f, 3.0f);
+    CMD4(CCC_Float, "r__ssa_discard_fade_k", &ps_r__ssaDISCARD_fade_k, 1.f, 4.0f);
+
 	//	CMD3(CCC_Mask,		"r2_sun_ignore_portals",		&ps_r2_ls_flags,			R2FLAG_SUN_IGNORE_PORTALS);
+    CMD4(CCC_Integer, "r_particles_real_dt", &ps_r2_particle_dt, 0, 1);
 }
 #endif

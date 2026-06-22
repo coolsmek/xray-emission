@@ -33,6 +33,10 @@ xr_token vid_bpp_token[] =
 	{"32", 32},
 	{0, 0}
 };
+
+extern float r_wallmarks_ssa_k;
+extern BOOL r_wallmarks_static;
+extern BOOL r_wallmarks_dynamic;
 //-----------------------------------------------------------------------
 
 void IConsole_Command::add_to_LRU(shared_str const& arg)
@@ -217,6 +221,25 @@ public:
 		Log("Key: Enter  / NumEnter      === Execute current command ");
 
 		Log("- --- Command listing: end ----");
+	}
+};
+
+class CCC_DumpCVars : public IConsole_Command
+{
+public:
+	CCC_DumpCVars(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = TRUE; }
+
+	virtual void Execute(LPCSTR args)
+	{
+		Log("- --- Console variables: start ---");
+		for (const auto& command : Console->Commands)
+		{
+			IConsole_Command::TStatus status;
+			command.second->Status(status);
+			if (status[0])
+				Msg("%s %s", command.second->Name(), status);
+		}
+		Log("- --- Console variables: end ---");
 	}
 };
 
@@ -756,7 +779,7 @@ public:
 	{
 		//fill_render_mode_list ();
 		tokens = vid_quality_token;
-		if (!strstr(Core.Params, "-r2"))
+		if (!Core.ParamsData.test(ECoreParams::r2))
 		{
 			inherited::Save(F);
 		}
@@ -983,6 +1006,7 @@ ENGINE_API float hit_modifier = 1.0f;
 
 extern float g_dispersion_base;
 extern float g_dispersion_factor;
+extern int g_ai_unlimited_ammo;
 float g_AimLookFactor = 1.f;
 
 int ps_framelimiter = 0;
@@ -1016,6 +1040,9 @@ void CCC_Register()
 	CMD1(CCC_Disconnect, "disconnect");
 	CMD1(CCC_SaveCFG, "cfg_save");
 	CMD1(CCC_LoadCFG, "cfg_load");
+	CMD1(CCC_DumpCVars, "dump_cvar");
+
+	CMD3(CCC_Mask, "mt_particles", &psDeviceFlags, mtParticles);
 
 #ifdef DEBUG
     CMD1(CCC_MotionsStat, "stat_motions");
@@ -1028,7 +1055,6 @@ void CCC_Register()
 #endif // DEBUG_MEMORY_MANAGER
 
 #ifdef DEBUG
-    CMD3(CCC_Mask, "mt_particles", &psDeviceFlags, mtParticles);
 
     CMD1(CCC_DbgStrCheck, "dbg_str_check");
     CMD1(CCC_DbgStrDump, "dbg_str_dump");
@@ -1053,14 +1079,21 @@ void CCC_Register()
     CMD3(CCC_Mask, "rs_render_dynamics", &psDeviceFlags, rsDrawDynamic);
 #endif
 
+	CMD3(CCC_Mask, "rs_render_portals", &psDeviceFlags, rsDrawPortals);
+
 	// bone damage modifier
 	CMD4(CCC_Float, "g_hit_pwr_modif", &hit_modifier, .5f, 3.f);
 
 	CMD4(CCC_Float, "g_dispersion_base", &g_dispersion_base, 0.0f, 5.0f);
 	CMD4(CCC_Float, "g_dispersion_factor", &g_dispersion_factor, 0.1f, 10.0f);
+	CMD4(CCC_Integer, "g_ai_unlimited_ammo", &g_ai_unlimited_ammo, 0, 1);
 
 	// Render device states
 	CMD4(CCC_Integer, "r__supersample", &ps_r__Supersample, 1, 4);
+
+    CMD4(CCC_Integer, "r_wallmarks_static", &r_wallmarks_static, 0, 1);
+    CMD4(CCC_Integer, "r_wallmarks_dynamic", &r_wallmarks_dynamic, 0, 1);
+    CMD4(CCC_Float, "r_wallmarks_ssa_k", &r_wallmarks_ssa_k, 0.25f, 10.f);
 
 	CMD4(CCC_Float, "r2_sunshafts_min", &ps_r2_sun_shafts_min, 0.0, 0.5);
 	CMD4(CCC_Float, "r2_sunshafts_value", &ps_r2_sun_shafts_value, 0.5, 2.0);
@@ -1206,7 +1239,7 @@ void CCC_Register()
 	CMD2(CCC_Color, "g_crosshair_color", &g_crosshair_color);
 	CMD4(CCC_Float, "mouse_sens_aim", &g_AimLookFactor, 0.01f, 5.0f);
 
-	if (strstr(Core.Params, "-dbgdev"))
+	if (Core.ParamsData.test(ECoreParams::dbgdev))
 		CMD4(CCC_Float, "g_freelook_z_offset_factor", &g_freelook_z_offset, -3.f, 3.f);
 
 	CMD4(CCC_Float, "g_ironsights_zoom_factor", &g_ironsights_factor, 1.f, 2.f);

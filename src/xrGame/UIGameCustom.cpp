@@ -44,6 +44,7 @@ CUIGameCustom::CUIGameCustom()
 	m_pMessagesWnd = nullptr;
 	ShowGameIndicators(true);
 	ShowCrosshair(true);
+    CustomStatics.reserve(64);
 }
 
 bool g_b_ClearGameCaptions = false;
@@ -56,6 +57,7 @@ CUIGameCustom::~CUIGameCustom()
 
 void CUIGameCustom::OnFrame()
 {
+	PROF_EVENT("CUIGameCustom::OnFrame");
 	CDialogHolder::OnFrame();
 	for (auto item : CustomStatics)
 		item->Update();
@@ -83,6 +85,7 @@ void CUIGameCustom::OnFrame()
 
 void CUIGameCustom::Render()
 {
+	PROF_EVENT("CUIGameCustom::Render");
 	for (StaticDrawableWrapper* item : CustomStatics)
 		item->Draw();
 	Window->Draw();

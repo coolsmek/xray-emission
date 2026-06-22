@@ -10,6 +10,7 @@
 #include "object_broker.h"
 #include "ui/UITextureMaster.h"
 #include "ui/UIHelper.h"
+#include "UICursor.h"
 
 #include "../Include/xrRender/UIShader.h"
 #include "gametaskmanager.h"
@@ -23,6 +24,8 @@ CMapSpot::CMapSpot(CMapLocation* ml)
 	m_location_level = 0;
 	m_border_static = NULL;
 	m_scale_bounds.set(-1.0f, -1.0f);
+	m_lbtn_down_pos.set(0.0f, 0.0f);
+	m_lbtn_armed = false;
 }
 
 CMapSpot::~CMapSpot()
@@ -59,6 +62,14 @@ void CMapSpot::Load(CUIXml* xml, LPCSTR path)
 		if (!Heading())
 		{
 			m_border_static->SetWidth(m_border_static->GetWidth() * UI().get_current_kx());
+			if (!UI().is_widescreen())
+			{
+				m_border_static->SetHeight(m_border_static->GetHeight() * UI().get_current_kx());
+			}
+			else
+			{
+				m_border_static->SetTextureOffset(1, 0);
+			}
 			m_border_static->SetStretchTexture(true);
 		}
 	}
@@ -87,32 +98,49 @@ void CMapSpot::Update()
 	}
 }
 
-bool CMapSpot::OnMouseDown(int mouse_btn)
+// Cursor must stay within this radius between MOUSE_1 down and up for the
+// press to count as a click rather than a map-pan drag.
+static const float MAP_SPOT_CLICK_THRESHOLD_SQ = 25.0f; // 5px squared
+
+bool CMapSpot::OnMouseAction(float x, float y, EUIMessages mouse_action)
 {
-	if (mouse_btn == MOUSE_1)
+	if (mouse_action == WINDOW_LBUTTON_DOWN)
 	{
-		CGameTask* t = Level().GameTaskManager().HasGameTask(m_map_location, true);
-		if (t)
+		m_lbtn_down_pos = GetUICursor().GetCursorPosition();
+		m_lbtn_armed    = true;
+		// Don't return true — the map needs the DOWN to begin pan tracking.
+	}
+	else if (mouse_action == WINDOW_LBUTTON_UP && m_lbtn_armed)
+	{
+		m_lbtn_armed = false;
+		Fvector2 up = GetUICursor().GetCursorPosition();
+		float dx = up.x - m_lbtn_down_pos.x;
+		float dy = up.y - m_lbtn_down_pos.y;
+		if ((dx * dx + dy * dy) < MAP_SPOT_CLICK_THRESHOLD_SQ)
 		{
 			GetMessageTarget()->SendMessage(this, MAP_SELECT_SPOT);
 			return true;
 		}
-		return false;
 	}
-	else if (mouse_btn == MOUSE_2)
+	return inherited::OnMouseAction(x, y, mouse_action);
+}
+
+bool CMapSpot::OnMouseDown(int mouse_btn)
+{
+	if (mouse_btn == MOUSE_2)
 	{
 		GetMessageTarget()->SendMessage(this, MAP_SELECT_SPOT2);
 		return true;
 	}
-	else
-	{
-		return false;
-	}
+	// MOUSE_1 is handled in OnMouseAction (down arms, up fires if no drag).
+	return false;
 }
 
 
 void CMapSpot::OnFocusLost()
 {
+	// Disarm so a later UP after the cursor re-enters can't fire a stale click.
+	m_lbtn_armed = false;
 	inherited::OnFocusLost();
 	GetMessageTarget()->SendMessage(this, MAP_HIDE_HINT, NULL);
 }
@@ -311,6 +339,11 @@ void CComplexMapSpot::Load(CUIXml* xml, LPCSTR path) // complex_spot_template
 	m_left_icon = CreateStaticOrig(*xml, "left_icon");
 	m_right_icon = CreateStaticOrig(*xml, "right_icon");
 	m_top_icon = CreateStaticOrig(*xml, "top_icon");
+	m_top_icon->SetStretchTexture(true);
+	m_top_icon->SetWidth(m_top_icon->GetWidth() * UI().get_current_kx());
+	if (!UI().is_widescreen()) {
+		m_top_icon->SetHeight(m_top_icon->GetHeight() * UI().get_current_kx());
+	}
 	m_timer = CreateStaticOrig(*xml, "timer");
 
 	xml->SetLocalRoot(stored_root);
@@ -373,6 +406,7 @@ void CComplexMapSpot::SetWndSize(const Fvector2& size)
 		return;
 	}
 	float k = size.x / m_originSize.x;
+	xrCriticalSectionGuard guard(csUi);
 
 	for (WINDOW_LIST_it it = m_ChildWndList.begin(); m_ChildWndList.end() != it; ++it)
 	{

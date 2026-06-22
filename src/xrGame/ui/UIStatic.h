@@ -80,8 +80,32 @@ public:
 	void SetShader(const ui_shader& sh);
 	CUIStaticItem& GetUIStaticItem() { return m_UIStaticItem; }
 
-	void SetStretchTexture(bool stretch_texture) { m_bStretchTexture = stretch_texture; }
-	bool GetStretchTexture() { return m_bStretchTexture; }
+	enum ETextureMode { tmNative = 0, tmStretch, tmCover };
+
+	void SetTextureMode(ETextureMode m)
+	{
+		m_eTextureMode = m;
+		m_UIStaticItem.SetTextureFit(m == tmCover ? CUIStaticItem::tfCover : CUIStaticItem::tfFill);
+	}
+	ETextureMode GetTextureMode() const { return m_eTextureMode; }
+
+	void SetStretchTexture(bool b)
+	{
+		if (b)
+			SetTextureMode(tmStretch);
+		else if (m_eTextureMode == tmStretch)
+			SetTextureMode(tmNative);
+	}
+	bool GetStretchTexture() { return m_eTextureMode == tmStretch; }
+
+	void SetCoverTexture(bool b)
+	{
+		if (b)
+			SetTextureMode(tmCover);
+		else if (m_eTextureMode == tmCover)
+			SetTextureMode(tmNative);
+	}
+	bool GetCoverTexture() { return m_eTextureMode == tmCover; }
 
 	void SetHeading(float f) { m_fHeading = f; };
 	float GetHeading() { return m_fHeading; }
@@ -94,12 +118,16 @@ public:
 	virtual void ColorAnimationSetTextureColor(u32 color, bool only_alpha);
 	virtual void ColorAnimationSetTextColor(u32 color, bool only_alpha);
 
-	void SetNoShaderCache(bool v) { m_UIStaticItem.SetNoShaderCache(v); }
+	virtual CUIWindow* ui_cast_window() { return this; }
+	virtual CUIStatic* ui_cast_static() { return this; }
+	virtual ITextureOwner* ui_cast_texture_owner() { return this; }
+	virtual CUILightAnimColorConroller* ui_cast_light_anim_color_controller() { return this; }
+    void SetNoShaderCache(bool v) { m_UIStaticItem.SetNoShaderCache(v); }
 
 protected:
 	CUILines* m_pTextControl;
 
-	bool m_bStretchTexture;
+	ETextureMode m_eTextureMode;
 	bool m_bTextureEnable;
 	CUIStaticItem m_UIStaticItem;
 
@@ -110,7 +138,7 @@ protected:
 	Fvector2 m_TextureOffset;
 
 public:
-	std::string m_TextureName;
+	xr_string m_TextureName;
 	CUILines* TextItemControl();
 	shared_str m_stat_hint_text;
 
@@ -153,6 +181,9 @@ public:
 	}
 
 	virtual void ColorAnimationSetTextColor(u32 color, bool only_alpha);
+
+	virtual CUIWindow* ui_cast_window() { return this; }
+	virtual CUILightAnimColorConroller* ui_cast_light_anim_color_controller() { return this; }
 
 	CUILines& TextItemControl() { return m_lines; }
 

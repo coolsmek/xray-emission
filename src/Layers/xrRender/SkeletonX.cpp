@@ -58,6 +58,8 @@ void CSkeletonX::_Copy(CSkeletonX* B)
 //////////////////////////////////////////////////////////////////////
 void CSkeletonX::_Render(ref_geom& hGeom, u32 vCount, u32 iOffset, u32 pCount)
 {
+	xrCriticalSectionGuard guard(&Parent->UCalc_Mutex);
+	PROF_EVENT("CSkeletonX::_Render");
 	Fmatrix p_WV, p_WVP;
 
 #ifdef USE_DX11 //
@@ -110,6 +112,7 @@ void CSkeletonX::_Render(ref_geom& hGeom, u32 vCount, u32 iOffset, u32 pCount)
 		break;
 	case RM_SINGLE:
 		{
+			PROF_EVENT("RM_SINGLE");
 			Fmatrix W;
 			W.mul_43(RCache.xforms.m_w, Parent->LL_GetTransform_R(u16(RMS_boneid)));
 			RCache.set_xform_world(W);
@@ -124,29 +127,36 @@ void CSkeletonX::_Render(ref_geom& hGeom, u32 vCount, u32 iOffset, u32 pCount)
 	case RM_SKINNING_3B:
 	case RM_SKINNING_4B:
 		{
+			PROF_EVENT("RM_SKINNING");
 			// Transfer matrices ( current and previous )
 			R_constant* array = RCache.get_c(s_bones_array_const);
-			R_constant* array_prev = RCache.get_c(s_bones_array_prev_const);
+			R_constant* array_prev = RImplementation.phase == RImplementation.PHASE_NORMAL ? RCache.get_c(s_bones_array_prev_const) : array;
 
-			u32 count = RMS_bonecount;
-			for (u32 mid = 0; mid < count; mid++)
 			{
-				Fmatrix& M = Parent->LL_GetTransform_R(u16(mid));
-				u32 id = mid * 3;
-				RCache.set_ca(&*array, id + 0, M._11, M._21, M._31, M._41);
-				RCache.set_ca(&*array, id + 1, M._12, M._22, M._32, M._42);
-				RCache.set_ca(&*array, id + 2, M._13, M._23, M._33, M._43);
+				PROF_EVENT("SEND_MATRICES");
+				u32 count = RMS_bonecount;
+				for (u32 mid = 0; mid < count; mid++)
+				{
+					Fmatrix& M = Parent->LL_GetTransform_R(u16(mid));
+					u32 id = mid * 3;
+					RCache.set_ca(&*array, id + 0, M._11, M._21, M._31, M._41);
+					RCache.set_ca(&*array, id + 1, M._12, M._22, M._32, M._42);
+					RCache.set_ca(&*array, id + 2, M._13, M._23, M._33, M._43);
 
 #ifdef USE_DX11
-				if (RImplementation.o.ssfx_motionvectors) 
-				{
-					// Save previous transform
-					Fmatrix& Mprev = Parent->LL_GetBoneInstance(u16(mid)).mRenderTransform_prev;
-					RCache.set_ca(&*array_prev, id + 0, Mprev._11, Mprev._21, Mprev._31, Mprev._41);
-					RCache.set_ca(&*array_prev, id + 1, Mprev._12, Mprev._22, Mprev._32, Mprev._42);
-					RCache.set_ca(&*array_prev, id + 2, Mprev._13, Mprev._23, Mprev._33, Mprev._43);
-				}
+					if (RImplementation.phase == RImplementation.PHASE_NORMAL)
+					{
+						if (RImplementation.o.ssfx_motionvectors)
+						{
+							// Save previous transform
+							Fmatrix& Mprev = Parent->LL_GetBoneInstance(u16(mid)).mRenderTransform_prev;
+							RCache.set_ca(&*array_prev, id + 0, Mprev._11, Mprev._21, Mprev._31, Mprev._41);
+							RCache.set_ca(&*array_prev, id + 1, Mprev._12, Mprev._22, Mprev._32, Mprev._42);
+							RCache.set_ca(&*array_prev, id + 2, Mprev._13, Mprev._23, Mprev._33, Mprev._43);
+						}
+					}
 #endif
+				}
 			}
 
 			// render
@@ -167,6 +177,7 @@ void CSkeletonX::_Render(ref_geom& hGeom, u32 vCount, u32 iOffset, u32 pCount)
 
 void CSkeletonX::_Render_soft(ref_geom& hGeom, u32 vCount, u32 iOffset, u32 pCount)
 {
+	PROF_EVENT("CSkeletonX::_Render_soft");
 	u32 vOffset = cache_vOffset;
 
 	_VertexStream& _VS = RCache.Vertex;
@@ -253,7 +264,7 @@ void CSkeletonX::_Load(const char* N, IReader* data, u32& dwVertCount)
 	dwVertCount = data->r_u32();
 
 	RenderMode = RM_SKINNING_SOFT;
-	Render->shader_option_skinning(-1);
+	Engine.External.SetSkinningMode();
 
 	switch (dwVertType)
 	{
@@ -283,21 +294,21 @@ void CSkeletonX::_Load(const char* N, IReader* data, u32& dwVertCount)
 				// HW- single bone
 				RenderMode = RM_SINGLE;
 				RMS_boneid = *bids.begin();
-				Render->shader_option_skinning(0);
+				Engine.External.SetSkinningMode(0);
 			}
 			else if (sw_bones_cnt <= hw_bones_cnt)
 			{
 				// HW- one weight
 				RenderMode = RM_SKINNING_1B;
 				RMS_bonecount = sw_bones_cnt + 1;
-				Render->shader_option_skinning(1);
+				Engine.External.SetSkinningMode(1);
 			}
 			else
 			{
 				// software
 				crc = crc32(data->pointer(), size);
 				Vertices1W.create(crc, dwVertCount, (vertBoned1W*)data->pointer());
-				Render->shader_option_skinning(-1);
+				Engine.External.SetSkinningMode();
 			}
 #endif
 		}
@@ -326,14 +337,14 @@ void CSkeletonX::_Load(const char* N, IReader* data, u32& dwVertCount)
 				// HW- two weights
 				RenderMode = RM_SKINNING_2B;
 				RMS_bonecount = sw_bones_cnt + 1;
-				Render->shader_option_skinning(2);
+				Engine.External.SetSkinningMode(2);
 			}
 			else
 			{
 				// software
 				crc = crc32(data->pointer(), size);
 				Vertices2W.create(crc, dwVertCount, (vertBoned2W*)data->pointer());
-				Render->shader_option_skinning(-1);
+				Engine.External.SetSkinningMode();
 			}
 		}
 		break;
@@ -359,13 +370,13 @@ void CSkeletonX::_Load(const char* N, IReader* data, u32& dwVertCount)
 			{
 				RenderMode = RM_SKINNING_3B;
 				RMS_bonecount = sw_bones_cnt + 1;
-				Render->shader_option_skinning(3);
+				Engine.External.SetSkinningMode(3);
 			}
 			else
 			{
 				crc = crc32(data->pointer(), size);
 				Vertices3W.create(crc, dwVertCount, (vertBoned3W*)data->pointer());
-				Render->shader_option_skinning(-1);
+				Engine.External.SetSkinningMode();
 			}
 		}
 		break;
@@ -392,13 +403,13 @@ void CSkeletonX::_Load(const char* N, IReader* data, u32& dwVertCount)
 			{
 				RenderMode = RM_SKINNING_4B;
 				RMS_bonecount = sw_bones_cnt + 1;
-				Render->shader_option_skinning(4);
+				Engine.External.SetSkinningMode(4);
 			}
 			else
 			{
 				crc = crc32(data->pointer(), size);
 				Vertices4W.create(crc, dwVertCount, (vertBoned4W*)data->pointer());
-				Render->shader_option_skinning(-1);
+				Engine.External.SetSkinningMode();
 			}
 		}
 		break;

@@ -13,7 +13,7 @@
 #include "tss.h"
 #include "blenders\blender.h"
 #include "blenders\blender_recorder.h"
-#include <tbb\parallel_for_each.h>
+#include "../../xrCore/_thread_types.h"
 
 //	Already defined in Texture.cpp
 void fix_texture_name(LPSTR fn);
@@ -153,6 +153,7 @@ ShaderElement* CResourceManager::_CreateElement(ShaderElement& S)
 
 	// Create _new_ entry
 	ShaderElement* N = xr_new<ShaderElement>(S);
+	//N->_copy(S);
 	N->dwFlags |= xr_resource_flagged::RF_REGISTERED;
 	v_elements.push_back(N);
 	return N;
@@ -271,10 +272,8 @@ Shader* CResourceManager::_cpp_Create(IBlender* B, LPCSTR s_shader, LPCSTR s_tex
 		if (S.equal(v_shaders[it])) return v_shaders[it];
 
 	// Create _new_ entry
-	Shader* N = xr_new<Shader>(S);
-	N->dwFlags |= xr_resource_flagged::RF_REGISTERED;
-	v_shaders.push_back(N);
-	return N;
+	Shader* ResultShader = _CreateShader(&S);
+	return ResultShader;
 }
 
 Shader* CResourceManager::_cpp_Create(LPCSTR s_shader, LPCSTR s_textures, LPCSTR s_constants, LPCSTR s_matrices)
@@ -370,9 +369,14 @@ Shader* CResourceManager::Create(LPCSTR s_shader, LPCSTR s_textures, LPCSTR s_co
 
 void CResourceManager::Delete(const Shader* S)
 {
+	if (0 == (S->dwFlags & xr_resource_flagged::RF_REGISTERED))
+		return;
+
 	xrCriticalSectionGuard guard(creationGuard);
-	if (0 == (S->dwFlags & xr_resource_flagged::RF_REGISTERED)) return;
-	if (reclaim(v_shaders, S)) return;
+
+	if (reclaim(v_shaders, S))
+		return;
+
 	Msg("! ERROR: Failed to find complete shader");
 }
 
@@ -385,7 +389,13 @@ void CResourceManager::DeferredUpload()
 	CTimer timer;
 	timer.Start();
 
-	tbb::parallel_for_each(m_textures, [&](auto m_tex) { m_tex.second->Load(); });
+	static DWORD this_thread_id = 0;
+	this_thread_id = GetCurrentThreadId();
+	xr_parallel_foreach(m_textures.begin(), m_textures.end(), [](auto& pair)
+	{
+		if (this_thread_id != GetCurrentThreadId()) { PROF_THREAD("X-Ray PPL Thread") }
+		pair.second->Load();
+	});
 
 	Msg("texture loading time: %d", timer.GetElapsed_ms());
 }
@@ -395,7 +405,40 @@ void CResourceManager::DeferredUnload()
 	if (!RDEVICE.b_is_Ready)
 		return;
 
-	tbb::parallel_for_each(m_textures, [&](auto m_tex) { m_tex.second->Unload(); });
+	xr_parallel_foreach(m_textures.begin(), m_textures.end(), [](auto& pair)
+	{
+		pair.second->Unload();
+	});
+}
+
+void CResourceManager::UnloadAllTexturesOnLevelUnload()
+{
+	if (!RDEVICE.b_is_Ready)
+		return;
+
+    xrCriticalSectionGuard guard(creationGuard);
+	xr_vector<CTexture*> textures_to_unload;
+	{
+		textures_to_unload.reserve(m_textures.size());
+
+		for (const auto& pair : m_textures)
+		{
+			CTexture* texture = pair.second;
+			if (!texture)
+				continue;
+
+			// Keep $ textures alive since they are bound to runtime render targets or other important parts
+			if (strstr(*texture->cName, "$"))
+				continue;
+
+			textures_to_unload.push_back(texture);
+		}
+	}
+
+	for (CTexture* texture : textures_to_unload)
+	{
+		texture->Unload();
+	}
 }
 
 #ifdef _EDITOR
@@ -417,6 +460,26 @@ void	CResourceManager::ED_UpdateTextures(AStringVec* names)
 	// DeferredUpload	();
 }
 #endif
+
+Shader* CResourceManager::_CreateShader(Shader* InShader)
+{
+	xrCriticalSectionGuard guard(creationGuard);
+
+	// Search equal in shaders array
+	for (Shader* it : v_shaders)
+	{
+		if (InShader->equal(it))
+			return it;
+	}
+
+	// Create _new_ entry
+	Shader* N = xr_new<Shader>(*InShader);
+	//N->_copy(*InShader);
+	N->dwFlags |= xr_resource_flagged::RF_REGISTERED;
+	v_shaders.push_back(N);
+
+	return N;
+}
 
 void CResourceManager::_GetMemoryUsage(u32& m_base, u32& c_base, u32& m_lmaps, u32& c_lmaps)
 {

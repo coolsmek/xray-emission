@@ -70,6 +70,9 @@ public:
 	void SetRotate(bool b) { m_flags.set(eRotate, b); }
 	void SetPointerDistance(float d) { m_pointer_dist = d; };
 	float GetPointerDistance() { return m_pointer_dist; };
+
+	virtual CUIWindow* ui_cast_window() { return this; }
+	virtual CUIStatic* ui_cast_static() { return this; }
 protected:
 	virtual void Init_internal(const shared_str& name, CInifile& pLtx, const shared_str& sect_name, LPCSTR sh_name);
 
@@ -117,12 +120,17 @@ protected:
 	virtual void Init_internal(const shared_str& name, CInifile& pLtx, const shared_str& sect_name, LPCSTR sh_name);
 };
 
+class CUITextWnd;
+
 class CUILevelMap : public CUICustomMap
 {
 	typedef CUICustomMap inherited;
 
 	CUIMapWnd* m_mapWnd;
 	Frect m_GlobalRect; // virtual map size (meters)
+	CUITextWnd* m_label; // owned and freed in dtor — do not enable autodelete
+	float m_label_scale_max; // hide label when global zoom >= this; 0 = always show
+	Fvector2 m_label_offset; // global_rect units from rect centre; +x right, +y up (scaled by zoom at apply)
 	CUILevelMap(const CUILevelMap& obj)
 	{
 	}

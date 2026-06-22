@@ -29,7 +29,7 @@ void lanim_cont_xf::set_defaults()
 
 CUIStatic::CUIStatic()
 	: m_bTextureEnable(true),
-	  m_bStretchTexture(false),
+	  m_eTextureMode(tmNative),
 	  m_bHeading(false),
 	  m_bConstHeading(false),
 	  m_fHeading(0.0f),
@@ -80,6 +80,7 @@ void CUIStatic::InitTextureEx(LPCSTR tex_name, LPCSTR sh_name)
 
 void CUIStatic::Draw()
 {
+	PROF_EVENT("CUIStatic::Draw");
 	DrawTexture();
 	inherited::Draw();
 	DrawText();
@@ -114,8 +115,28 @@ void CUIStatic::DrawTexture()
 		GetAbsoluteRect(rect);
 		m_UIStaticItem.SetPos(rect.left + m_TextureOffset.x, rect.top + m_TextureOffset.y);
 
-		if (m_bStretchTexture)
+		if (m_eTextureMode == tmNative)
 		{
+			Frect r = {
+				0.0f, 0.0f,
+				m_UIStaticItem.GetTextureRect().width(),
+				m_UIStaticItem.GetTextureRect().height()
+			};
+
+			if (Heading())
+			{
+				float t1, t2;
+				t1 = rect.width();
+				t2 = rect.height();
+				rect.y2 = rect.y1 + t1;
+				rect.x2 = rect.x1 + t2;
+			}
+
+			m_UIStaticItem.SetSize(Fvector2().set(r.width(), r.height()));
+		}
+		else
+		{
+			// tmStretch and tmCover both fill the slot; cover crops the UV in the renderer
 			if (Heading())
 			{
 				if (m_UIStaticItem.GetFixedLTWhileHeading())
@@ -128,27 +149,6 @@ void CUIStatic::DrawTexture()
 				}
 			}
 			m_UIStaticItem.SetSize(Fvector2().set(rect.width(), rect.height()));
-		}
-		else
-		{
-			Frect r = {
-				0.0f, 0.0f,
-				m_UIStaticItem.GetTextureRect().width(),
-				m_UIStaticItem.GetTextureRect().height()
-			};
-
-			{
-				if (Heading())
-				{
-					float t1, t2;
-					t1 = rect.width();
-					t2 = rect.height();
-					rect.y2 = rect.y1 + t1;
-					rect.x2 = rect.x1 + t2;
-				}
-
-				m_UIStaticItem.SetSize(Fvector2().set(r.width(), r.height()));
-			}
 		}
 
 		if (Heading())
@@ -319,7 +319,7 @@ void CUITextWnd::Draw()
 
 void CUITextWnd::Update()
 {
-	R_ASSERT(GetChildWndList().size()==0);
+	R_ASSERT(GetChildNum() == 0);
 	UpdateColorAnimation();
 	inherited::Update();
 }

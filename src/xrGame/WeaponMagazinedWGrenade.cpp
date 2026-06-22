@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "weaponmagazinedwgrenade.h"
 #include "entity.h"
-#include "ParticlesObject.h"
 #include "GrenadeLauncher.h"
 #include "xrserver_objects_alife_items.h"
 #include "ExplosiveRocket.h"
@@ -211,6 +210,7 @@ bool CWeaponMagazinedWGrenade::SwitchMode(bool force)
 }
 
 extern BOOL useSeparateUBGLKeybind;
+extern BOOL g_launcher_dynamic_range_zoom;
 void CWeaponMagazinedWGrenade::PerformSwitchGL()
 {
 	m_bGrenadeMode = !m_bGrenadeMode;
@@ -429,7 +429,7 @@ void CWeaponMagazinedWGrenade::LaunchGrenade()
 
 		launch_matrix.c.set(p1);
 
-		if (IsGameTypeSingle() && IsZoomed() && smart_cast<CActor*>(H_Parent()))
+		if (IsGameTypeSingle() && IsZoomed() && smart_cast<CActor*>(H_Parent()) && g_launcher_dynamic_range_zoom)
 		{
 			H_Parent()->setEnabled(FALSE);
 			setEnabled(FALSE);

@@ -1,9 +1,5 @@
 #include "stdafx.h"
 #include "car.h"
-//#if 0
-
-#include "ParticlesObject.h"
-//#include "Physics.h"
 
 #ifdef DEBUG
 #	include "../xrEngine/StatGraph.h"
@@ -98,6 +94,9 @@ CCar::CCar()
 	m_car_weapon = NULL;
 	m_power_neutral_factor = 0.25f;
 	m_steer_angle = 0.f;
+	m_speed_governed = false;
+	m_target_speed = 0.f;
+	m_throttle = 1.f;
 #ifdef DEBUG
 	InitDebug();
 #endif
@@ -209,8 +208,7 @@ void CCar::Load(LPCSTR section)
 {
 	inherited::Load(section);
 	//CPHSkeleton::Load(section);
-	ISpatial* self = smart_cast<ISpatial*>(this);
-	if (self) self->spatial.type |= STYPE_VISIBLEFORAI;
+	SpatialComponent->spatial.type |= STYPE_VISIBLEFORAI;
 
 #ifdef CAR_NEW
 	{
@@ -293,17 +291,7 @@ BOOL CCar::net_Spawn(CSE_Abstract* DC)
 		m_memory->reload(pUserData->r_string("visual_memory_definition", "section"));
 	}
 	
-	renderable.visual->flags.set(IRenderVisualFlags::eIgnoreOptimization, TRUE);
-
-	xr_vector<IRenderVisual*>* children = renderable.visual->get_children();
-
-	if (children)
-	{
-		for (auto* child : *children)
-		{
-			child->flags.set(IRenderVisualFlags::eIgnoreOptimization, TRUE);
-		}
-	}
+    renderable.visual->MarkIgnoreOptimization(TRUE);
 
 #ifdef CAR_NEW
 	CInifile *ini = Visual()->dcast_PKinematics()->LL_UserData();
@@ -314,17 +302,17 @@ BOOL CCar::net_Spawn(CSE_Abstract* DC)
 	m_zoom_factor_def = READ_IF_EXISTS(ini, r_float, cfg, "zoom_factor_def", 1.0F);
 	m_zoom_factor_aim = READ_IF_EXISTS(ini, r_float, cfg, "zoom_factor_aim", 1.0F);
 
-	if (ini->line_exist(cfg, "camera_first"))
+	if (ini->line_exist("camera", "cam_first"))
 	{
-		camera[ectFirst]->Load(ini->r_string(cfg, "camera_first"));
+		camera[ectFirst]->Load(ini->r_string("camera", "cam_first"));
 	}
-	if (ini->line_exist(cfg, "camera_chase"))
+	if (ini->line_exist("camera", "cam_chase"))
 	{
-		camera[ectChase]->Load(ini->r_string(cfg, "camera_chase"));
+		camera[ectChase]->Load(ini->r_string("camera", "cam_chase"));
 	}
-	if (ini->line_exist(cfg, "camera_free"))
+	if (ini->line_exist("camera", "cam_free"))
 	{
-		camera[ectFree]->Load(ini->r_string(cfg, "camera_free"));
+		camera[ectFree]->Load(ini->r_string("camera", "cam_free"));
 	}
 
 	m_remote_control = !!READ_IF_EXISTS(ini, r_bool, cfg, "remote_control", FALSE);
@@ -651,9 +639,9 @@ void CCar::VisualUpdate(float fov)
 	m_lights.Update();
 }
 
-void CCar::renderable_Render()
+void CCar::renderable_Render(IDSGraphManager* DM)
 {
-	inherited::renderable_Render();
+	inherited::renderable_Render(DM);
 	if (m_car_weapon)
 		m_car_weapon->Render_internal();
 }
@@ -674,7 +662,7 @@ void CCar::net_Import(NET_Packet& P)
 	//	P.w_u32 (NumItems);
 }
 
-void CCar::OnHUDDraw(CCustomHUD* /**hud*/)
+void CCar::OnHUDDraw(CCustomHUD* hud, IDSGraphManager* DM)
 {
 #ifdef DEBUG
 	Fvector velocity;
@@ -723,6 +711,15 @@ void CCar::Hit(SHit* pHDS)
 #endif
 
 	inherited::Hit(&HDS);
+
+	::luabind::functor<void> hitFunct;
+	if (ai().script_engine().functor("_G.CCar__OnHit", hitFunct))
+	{
+		const CGameObject* whoGO = smart_cast<const CGameObject*>(HDS.who);
+		CScriptHit tLuaHit(&HDS);
+		hitFunct(lua_game_object(), whoGO ? whoGO->lua_game_object() : (CScriptGameObject*)0, &tLuaHit, HDS.boneID);
+	}
+
 	if (!CDelayedActionFuse::isActive())
 	{
 		CDelayedActionFuse::CheckCondition(GetfHealth());
@@ -1344,6 +1341,25 @@ void CCar::SteerIdle()
 	for (; i != e; ++i)
 		i->SteerIdle();
 	e_state_steer = idle;
+}
+
+void CCar::SetSteer(float k)
+{
+	if (k < -1.f) k = -1.f;
+	else if (k > 1.f) k = 1.f;
+	if (_abs(k) < 0.01f)
+	{
+		SteerIdle();
+		return;
+	}
+	b_wheels_limited = true;
+	m_pPhysicsShell->Enable();
+	xr_vector<SWheelSteer>::iterator i, e;
+	i = m_steering_wheels.begin();
+	e = m_steering_wheels.end();
+	for (; i != e; ++i)
+		i->SteerTo(k);
+	e_state_steer = (k > 0.f) ? right : left;
 }
 
 void CCar::LimitWheels()
@@ -1982,7 +1998,7 @@ void CCar::PhDataUpdate(float step)
 	//if(fwp)
 	{
 		UpdatePower();
-		if (b_engine_on && !b_starting && m_current_rpm < m_min_rpm)Stall();
+		if (b_engine_on && !b_starting && m_current_rpm < m_min_rpm && !m_speed_governed)Stall();
 	}
 
 	if (bkp)
@@ -1998,7 +2014,7 @@ void CCar::PhDataUpdate(float step)
 		SDoor* D = m_doors_update[k];
 		if (!D->update)
 		{
-			m_doors_update.erase(m_doors_update.begin() + k);
+			m_doors_update.erase_fast(m_doors_update.begin() + k);
 			--k;
 		}
 		else
@@ -2149,6 +2165,7 @@ IC void CCar::fill_exhaust_vector(LPCSTR S, xr_vector<SExhaust>& exhausts)
 	IKinematics* pKinematics = smart_cast<IKinematics*>(Visual());
 	string64 S1;
 	int count = _GetItemCount(S);
+    exhausts.reserve(count);
 	for (int i = 0; i < count; ++i)
 	{
 		_GetItem(S, i, S1);
@@ -2208,6 +2225,45 @@ u16 CCar::Initiator()
 float CCar::RefWheelMaxSpeed()
 {
 	return m_max_rpm / m_current_gear_ratio;
+}
+
+float CCar::DriveRefSpeed()
+{
+	if (!m_speed_governed) return RefWheelMaxSpeed();
+	float max_w = _abs(RefWheelMaxSpeed());
+	float w = m_target_speed / m_ref_radius;
+	if (w > max_w) return max_w;
+	if (w < -max_w) return -max_w;
+	return w;
+}
+
+void CCar::SetTargetSpeed(float mps)
+{
+	m_target_speed = mps;
+	m_speed_governed = true;
+}
+
+void CCar::ClearTargetSpeed()
+{
+	m_speed_governed = false;
+}
+
+float CCar::GetWheelFriction()
+{
+	if (m_wheels_map.empty()) return 0.f;
+	return m_wheels_map.begin()->second.collision_params.mu_factor;
+}
+
+void CCar::SetWheelFriction(float mu_factor)
+{
+	xr_map<u16, SWheel>::iterator i = m_wheels_map.begin(), e = m_wheels_map.end();
+	for (; i != e; ++i)
+		i->second.collision_params.mu_factor = mu_factor;
+}
+
+void CCar::SetThrottle(float k)
+{
+	m_throttle = (k < 0.f) ? 0.f : (k > 1.f ? 1.f : k);
 }
 
 float CCar::EngineCurTorque()

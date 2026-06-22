@@ -71,7 +71,7 @@ IC bool is_imotion(interactive_motion* im)
 
 CCharacterPhysicsSupport::~CCharacterPhysicsSupport()
 {
-	set_collision_hit_callback(0);
+	xr_delete(m_collision_hit_callback);
 	if (m_flags.test(fl_skeleton_in_shell))
 	{
 		if (m_physics_skeleton)
@@ -389,6 +389,7 @@ void CCharacterPhysicsSupport::UpdateCollisionActivatingDellay()
 
 void CCharacterPhysicsSupport::in_shedule_Update(u32 DT)
 {
+	PROF_EVENT();
 	///VERIFY( 0 );
 
 	//CPHSkeleton::Update(DT);
@@ -657,10 +658,10 @@ void CCharacterPhysicsSupport::in_UpdateCL()
 
 		// demonized: use screen space area to check if need update
 		float perceived_dist = Device.GetPerceivedDist(p);
-		float ssa = Device.CalcSSADynamic(m_EntityAlife.spatial.sphere.P, m_EntityAlife.spatial.sphere.R);
+		float ssa = Device.CalcSSADynamic(m_EntityAlife.SpatialComponent->spatial.sphere.P, m_EntityAlife.SpatialComponent->spatial.sphere.R);
 		if (ssa > IK_CALC_SSA)
 		{
-			if (view_frust.testSphere_dirty(m_EntityAlife.spatial.sphere.P, m_EntityAlife.spatial.sphere.R) || perceived_dist < IK_ALWAYS_CALC_DIST)
+			if (view_frust.testSphere_dirty(m_EntityAlife.SpatialComponent->spatial.sphere.P, m_EntityAlife.SpatialComponent->spatial.sphere.R) || perceived_dist < IK_ALWAYS_CALC_DIST)
 			{
 				update_interactive_anims();
 				ik_controller()->Update();
@@ -887,7 +888,10 @@ BOOL dbg_draw_ragdoll_spawn = FALSE;
 #endif
 void CCharacterPhysicsSupport::ActivateShell(CObject* who)
 {
-	R_ASSERT(_valid(m_EntityAlife.Position( )));
+    if (!_valid(m_EntityAlife.Position()))
+    {
+        Debug.fatal(DEBUG_INFO, "CCharacterPhysicsSupport::ActivateShell Fatal error, invalid position for m_EntityAlife %s, id %d, x %.5f, y %.5f, z %.5f", m_EntityAlife.cNameSect().c_str(), m_EntityAlife.ID(), m_EntityAlife.Position().x, m_EntityAlife.Position().y, m_EntityAlife.Position().z);
+    }
 	Fvector start;
 	start.set(m_EntityAlife.Position());
 	Fvector velocity;

@@ -29,6 +29,8 @@
 #include "../../danger_manager.h"
 #include "../../visual_memory_manager.h"
 #include "../../agent_enemy_manager.h"
+#include "../../script_game_object.h"
+#include "../../ai_space.h"
 
 const u32 TOLLS_INTERVAL = 2000;
 const u32 GRENADE_INTERVAL = 0 * 1000;
@@ -58,16 +60,12 @@ bool CAI_Stalker::useful(const CItemManager* manager, const CGameObject* object)
 	if (!memory().item().useful(object))
 		return (false);
 
-	const CInventoryItem* inventory_item = smart_cast<const CInventoryItem*>(object);
-	if (!inventory_item || !inventory_item->useful_for_NPC())
-		return (false);
-
 	const CBolt* bolt = smart_cast<const CBolt*>(object);
 	if (bolt)
 		return (false);
 
 	CInventory* inventory_non_const = const_cast<CInventory*>(&inventory());
-	CInventoryItem* inventory_item_non_const = const_cast<CInventoryItem*>(inventory_item);
+	CInventoryItem* inventory_item_non_const = const_cast<CInventoryItem*>(smart_cast<const CInventoryItem*>(object));
 	if (!inventory_non_const->CanTakeItem(inventory_item_non_const))
 		return (false);
 
@@ -168,6 +166,14 @@ void CAI_Stalker::react_on_member_death()
 			sound().play(StalkerSpace::eStalkerSoundWounded, 3000, 2000);
 	}
 
+	{
+		::luabind::functor<void> funct;
+		if (ai().script_engine().functor("_G.CAI_Stalker__OnMemberDeathReaction", funct))
+			funct(lua_game_object(),
+			      reaction.m_member ? reaction.m_member->lua_game_object() : nullptr,
+			      reaction.m_member ? reaction.m_member->g_Alive() : false);
+	}
+
 	reaction.clear();
 }
 
@@ -178,6 +184,9 @@ void CAI_Stalker::process_enemies()
 
 	typedef MemorySpace::squad_mask_type squad_mask_type;
 	typedef CVisualMemoryManager::VISIBLES VISIBLES;
+
+    if (!memory().visual().objectsPtr())
+        return;
 
 	squad_mask_type mask = memory().visual().mask();
 	VISIBLES::const_iterator I = memory().visual().objects().begin();

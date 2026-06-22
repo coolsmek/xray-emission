@@ -147,7 +147,7 @@ void CSE_ALifeDynamicObject::detach(CSE_ALifeInventoryItem* tpALifeInventoryItem
 
 	if (I)
 	{
-		children.erase(*I);
+		children.erase_fast(*I);
 		return;
 	}
 
@@ -156,7 +156,7 @@ void CSE_ALifeDynamicObject::detach(CSE_ALifeInventoryItem* tpALifeInventoryItem
 
 	ALife::OBJECT_IT i = std::find(children.begin(), children.end(), tpALifeInventoryItem->base()->ID);
 	R_ASSERT2(children.end() != i, "Can't detach an item which is not on my own");
-	children.erase(i);
+	children.erase_fast(i);
 }
 
 void add_online_impl(CSE_ALifeDynamicObject* object, const bool& update_registries)
@@ -265,8 +265,6 @@ void add_offline_impl(CSE_ALifeDynamicObject* object, const xr_vector<ALife::_OB
 		if (!child->can_save())
 		{
 			object->alife().release(child);
-			--i;
-			--n;
 			continue;
 		}
 

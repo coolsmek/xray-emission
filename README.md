@@ -19,14 +19,14 @@ MT version includes all features of standard Modded Exes described below, plus:
   * Particle interpolation between frames for smoother appearance
   * Multithreaded: 
     * Loading resources (textures, models, CFORM (collisions))
-    * HOM (Visibility tests)
     * Grass rendering
     * Rain
     * Particles
     * Bones calculations for models
     * Engine scheduler, split between real-time updated objects on main thread and others on separate thread with configurable batch amount to do per frame
     * Feel and Vision for AI
-    * Task Manager
+    * Task Manager (disabled by default)
+    * UI (disabled by default)
     * Parallel execution of `CreateTimeEvent` and `AddUniqueCall` commands (disabled by default)
     * Logger
   * Toggleable options available in Modded Exes options
@@ -235,6 +235,159 @@ How to compile exes:
 13. A short video demonstration of the entire process: https://youtu.be/MmZwyM2QO38
 
 ## Changelog
+**2026.06.21**
+* Main and MT:
+  * New Lua exports to get/set hud fire bone/pos(silencer)
+  * Possibility to change new fields with upgrades:
+fire_point, fire_point2, fire_point_silencer, hud_fire_point, hud_fire_point2, hud_fire_point_silencer
+  * `motion_mark_reload` ltx to Specify motion mark to trigger reload logic, when empty or unspecified uses any motion mark like vanilla code
+  * shader cache: check and save source CRC, (after shader editing) if it does not match, recompile the shader, inspired by openxray
+  * Priler: infinite/super long bolts throwing issue workaround (https://github.com/themrdemonized/xray-monolith/pull/575)
+  * Leyths: CCar Lua surface + physics-island opt-in for >4-wheel vehicles (https://github.com/themrdemonized/xray-monolith/pull/569)
+
+* MT:
+  * `r__hom_dynamic` is disabled by default
+  * address crash `stalker_movement_manager_base.cpp (308): stalker_movement_manager_base::setup_movement_params`, check for validity of vertices
+  * gwalls: Fix cross-object skeleton mutex deadlock in CCF_Skeleton::BuildState (https://github.com/themrdemonized/xray-monolith/pull/576)
+
+**2026.06.12**
+* Main and MT:
+  * Disable shadow casting and volumetric for signal lights and hanging lamps, conflict with SSS
+  * Log all console variables on game start and crash
+  * damiansirbu: `g_ai_unlimited_ammo` cvar to toggle unlimited ammo for NPCs (https://github.com/themrdemonized/xray-monolith/pull/557)
+  * erepb: fix portraits stretch (https://github.com/themrdemonized/xray-monolith/pull/561)
+  * TheLostInPlace: 
+    * Add `g_launcher_dynamic_range_zoom` console variable to toggle ballistic aim assist (https://github.com/themrdemonized/xray-monolith/pull/560)
+    * Lua Combat AI Hook System (https://github.com/themrdemonized/xray-monolith/pull/563)
+  * lulnope: floating artefact fix (https://github.com/themrdemonized/xray-monolith/pull/562)
+  * Leyths: Detail textures: add v4 format (14-bit ids, up to 16383 objects), read v3+v4 (https://github.com/themrdemonized/xray-monolith/pull/564)
+  * Priler: Add `level.remove_hud_motion_cam_effectors()` for cancelling per-animation HUD camera effectors (https://github.com/themrdemonized/xray-monolith/pull/568)
+
+* MT:
+  * Address crash `xr_collide_form.cpp (263): CCF_Skeleton::_RayQuery`
+  * Address crash `UIDialogHolder.cpp (266): CDialogHolder::OnFrame [error][      87] : The parameter is incorrect.`
+
+**2026.06.05**
+* Main and MT:
+  * Bugfixes to Modded Exes options
+  * `db.actor:cast_Actor():conditions():GetAlcohol()` export to get current alcohol level
+  * erepb: Fix `[TR] can't switch child [%d] offline, it's null` spam (https://github.com/themrdemonized/xray-monolith/pull/553)
+
+**2026.06.01**
+
+* Main and MT:
+  * Possibility to set shadow, volumetric, ambient_shadow, ambient_volumetric properties for lights of CHangingLamp, such as signal lights
+  * Signal lights are volumetric and cast shadows, hanging lamps cast shadows
+  * `obj:force_set_restrictor_type` for space restrictors and `obj:invalidate_restrictions` for living creatures
+  * `obj:is_enabled_anomaly` export for anomalies
+  * `g_restriction_rebuild_frames` cvar to tune amount of frames to wait for pathing rebuild until it forces to wait, default 20
+  * Fixed `ai_move_to_cover` Modded Exe option
+  * Anomalies evasion for monsters:
+    * When monster is near any anomaly, the anomaly registers itself as space restrictor and forces a monster to calculate new path
+    * Depending on if monster's path was recalculated in time, it will move around the anomaly
+  * Fix stutter when typing `load`/`save` in console
+  * Safer transfer money script functions, thanks `damiansirbu` for the idea
+  * Make splash logo window not overlap other windows, thanks `AzuNar` for the idea
+  * `CSE_ALifeOnlineOfflineGroup` force `actualize` before update and syncronize locations calls
+  * `xr_weapon_jam` refactor
+    * Engine calls `GetConditionMisfireProbability`
+    * `npc_get_misfire_probability` callback to set probability
+    * old code ported to the new callback system
+  * Leyths: PDA map: cap zoom easing and cancel on user pan (https://github.com/themrdemonized/xray-monolith/pull/542)
+  * erepb:
+    * Fix generate available tasks for warfare traders (https://github.com/themrdemonized/xray-monolith/pull/547)
+    * Fix double online transition crash (https://github.com/themrdemonized/xray-monolith/pull/552)
+    * Fix busyhands: remove non-savable children (https://github.com/themrdemonized/xray-monolith/pull/553)
+    * Skip member-less squad update (https://github.com/themrdemonized/xray-monolith/pull/554)
+  * Skyki15: Re-enable NPC misfire and description fixes (https://github.com/themrdemonized/xray-monolith/pull/550)
+
+* MT:
+  * Implement automatic invalid `level_vertex_id` correction in paths (https://github.com/ixray-team/ixray-1.6-stcop/commit/a8d8d9bd97d77d90c8282bee41afaf6cea16c39c)
+  * Fix invalid position recovery when going online (https://github.com/ixray-team/ixray-1.6-stcop/commit/5f8b2c47632e302730be1cede843d61c8e8aadd8)
+  * `r__hom_dynamic` command to enable HOM visibility tests for dynamic objects, default disabled
+  * `mt_SchedulerRT` command to toggle actor's and other RT objects scheduler to second thread, will increase performance but will cause problems, default disabled
+  * Increased range of `scheduler_batch_size`.
+  * Default batch size is 256. GAMMA players are recommended to increase batch size to 512 or more
+  * `level.scheduler_flush` to force maximum size of scheduler batch size
+  * On first few seconds after loading, scheduler will be forced to max batch size, then it will go back to the value of `scheduler_batch_size`, fixes occasional bugs of some mods
+  * Optimize particle loading with memory reservation (https://github.com/ixray-team/ixray-1.6-stcop/commit/04459cdaf9665857a2353351ac8bd928d12306a8)
+  * Possible fix for stuck doors
+  * Improved wait loops for particle system
+  * `ai_enhanced_vision` cvar to remove "fuzzy" check for AI visibility. Enabling it makes them see more aggresively but might lead to seeing through walls. Default disabled
+
+**2026.05.24**
+
+* Main and MT:
+  * Revert label scaling behaviour changes introduced in https://github.com/themrdemonized/xray-monolith/pull/535 due to bugs in GAMMA
+
+* MT:
+   * Revert `Topological sort bones, 33% perf increase (https://github.com/OpenXRay/xray-16/commit/797ba9236bb4b2e6f4f914f71bf684f0888a9479)`
+
+**2026.05.23**
+
+* Main and MT:
+  * DEFAULT_SAMPLE_COUNT is 32, fix https://github.com/themrdemonized/xray-monolith/issues/534
+  * Fixed incorrect Modded Exes options strings
+  * Remove empty checks in `CSE_ALifeOnlineOfflineGroup::synchronize_location` and `CSE_ALifeOnlineOfflineGroup::update` in favor of `actualize` calls inside begin
+  * trans_outfit.transparent_gg improvement (not relevant to GAMMA) 
+    * When NPC gets hit by anything, boost vision to 200m for 2 minutes except if actor is in stealth suit
+    * Reduce blindness check from 120 to 100 meters
+  * Apply random offset for weather's `ambient_particles` in `CGamePersistent::WeathersUpdate`
+  * Skyki15: AI Configuration & Fixes (https://github.com/themrdemonized/xray-monolith/pull/523)
+  * Leyths: PDA Map QoL features (https://github.com/themrdemonized/xray-monolith/pull/535)
+  * Verdatim25: Fix for tri state reload weapons reload interrupting due to UI menu open (https://github.com/themrdemonized/xray-monolith/pull/536)
+  * Orleonn: CTexture: GIF animation support (https://github.com/themrdemonized/xray-monolith/pull/537)
+  * damiansirbu: per-actor-level clsid-filtered object iteration to Lua (https://github.com/themrdemonized/xray-monolith/pull/538)
+
+* MT:
+  * Unstable MT optimizations are moved below others with warning label
+  * Fix double particle rendering (https://github.com/ixray-team/ixray-1.6-stcop/commit/30832c945e18f08a4f2279682b06e1b3c149b2b9)
+  * Topological sort bones, 33% perf increase (https://github.com/OpenXRay/xray-16/commit/797ba9236bb4b2e6f4f914f71bf684f0888a9479)
+  * Fix NPC shaking when aiming at nearby player (https://github.com/ixray-team/ixray-1.6-stcop/commit/7e2fbfdaa8c26aa87aac9abf97cd805ff4db5463)
+  * Thread safety for CModelPool
+  * Simplified `light_vis`, fixed flickering lights in some places
+  * Fixed potential stack overflow when loading textures if `r__clear_resource_on_unload 0`
+  * Edited `phase_ssfx_sss_ext` to work correctly with `r2_shadow_omnipart_vischeck 1`
+
+**2026.05.15**
+
+* Main and MT:
+  * First Person Death improvements:
+    * Increase collision size of `bip01_head` on death to prevent camera clipping into the ground
+    * `first_person_death_head_scale` cvar to adjust
+  * `BusyHandsDebug`: do not engage UI when busy hands was triggered while in main menu
+  * `CSE_ALifeOnlineOfflineGroup::update` is in try catch block
+  * damiansirbu: Guard empty m_members in CSE_ALifeOnlineOfflineGroup::update and synchronize_location (https://github.com/themrdemonized/xray-monolith/pull/527)
+  * Lucy: Fix models not compiling the correct shader when set_shader is used (https://github.com/themrdemonized/xray-monolith/pull/529)
+  * Orleon: Added 'actor_on_item_sell' and 'actor_on_item_buy' callbacks
+  * GhenTuong: Revert xr_combat_ignore.script, fix CCar drone, export functions for physics_shell and CUIProgressBar (https://github.com/themrdemonized/xray-monolith/pull/532)
+
+* MT:
+  * Lights:
+    * `r2_shadow_lod_min` cvar to hard limit lights' rendering distance independently of `r2_slight_fade`, more value will limit rendering distance sooner, default 0.02
+    * `r2_shadow_omnipart_vischeck` to enable visibility checks for additional 6 lights that are created for each point light, increases performance by not rendering invisible lights, default enabled
+    * Removed while loop in light visibility tests, the visibility result will be retrieved next frame. Pending results are treated as visible.
+  * Emissive objects won't have SSA check applied to render them further without noticeable pop-in
+  * `CPHSimpleCharacter::UpdateDynamicDamage` has try catch block to hopefully not crash
+  * Crash fix on `TTestDepthCallback` error
+  * `ph_ref_object` safety checks
+  * Fix flickering grass on some systems, ensures that MT_CALC finishes before render.
+  * Fixed `r2_mt 0` behaviour with grass
+  * Restored multithreaded HOM with additional thread safety
+  * Reduced possibility of UI crashes by reserving UI elements capacity a bit
+
+**2026.05.08**
+
+* Main and MT:
+  * Persistent weather do not load/save state on transitions to underground levels
+  * Disable actor shadow when when `level.set_cam_custom_position_direction` is engaged and `r__actor_shadow_in_demo_record` is 1
+  * Fixed crash on `poltergeist_telekinesis.cpp (310): SCollisionHitCallback::call` with Poltergeists
+
+* MT:
+  * `r__clear_resources_on_unload` cvar to force unload textures and models from pool on level change or exit. Will decrease VRAM usage but increase loading times
+  * Fixed `r__no_ram_textures` behaviour to match vanilla
+  * `setVisible(false)` for objects about to be destroyed, possibly fixes visuals flickering for one frame like with Mags Redux mod
+  * `CSoundMemoryManager::update` `m_sounds` nullptr check
 
 **2026.05.05**
 * Main and MT:

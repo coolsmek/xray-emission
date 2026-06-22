@@ -27,9 +27,10 @@
 #include "agent_manager.h"
 #include "agent_enemy_manager.h"
 
-static const u32 ENEMY_INERTIA_TIME_TO_SOMEBODY = 3000;
-static const u32 ENEMY_INERTIA_TIME_TO_ACTOR = 0;
-static const u32 ENEMY_INERTIA_TIME_FROM_ACTOR = 6000;
+u32 ENEMY_INERTIA_TIME_TO_SOMEBODY = 3000;
+u32 ENEMY_INERTIA_TIME_TO_ACTOR = 0;
+u32 ENEMY_INERTIA_TIME_FROM_ACTOR = 6000;
+
 
 #ifdef _DEBUG
 bool g_enemy_manager_second_update	 = false;
@@ -59,10 +60,11 @@ bool CEnemyManager::is_useful(const CEntityAlive* entity_alive) const
 int enemy_manager_useful_cache_time = 200;
 bool CEnemyManager::useful(const CEntityAlive* entity_alive) const
 {
+	PROF_EVENT("CEnemyManager::useful");
 	if (!entity_alive->g_Alive())
 		return (false);
 
-	if ((entity_alive->spatial.type & STYPE_VISIBLEFORAI) != STYPE_VISIBLEFORAI)
+	if ((entity_alive->SpatialComponent->spatial.type & STYPE_VISIBLEFORAI) != STYPE_VISIBLEFORAI)
 		return (false);
 
 	if ((m_object->ID() == entity_alive->ID()) || !m_object->is_relation_enemy(entity_alive))
@@ -130,10 +132,18 @@ float CEnemyManager::evaluate(const CEntityAlive* object) const
 	// if we are hit
 	if (object->ID() == m_object->memory().hit().last_hit_object_id())
 	{
-		if (actor)
-			penalty -= 1500.f;
+		float hit_dist = m_object->Position().distance_to(object->Position());
+		
+		// In CQB (< 30m), the distance score variance is only 0 to 9 points.
+		// A tiny -5 penalty ensures they turn to a flanker at 15m, 
+		// but WON'T ignore a guy actively fighting them at 5m just because they got shot!
+		if (hit_dist < 30.f)
+			penalty -= 5.f;
+			
+		// For medium/long range, give a standard 100m aggro advantage
+		// so they still react to snipers if they aren't busy with a close target.
 		else
-			penalty -= 500.f;
+			penalty -= 100.f;
 	}
 
 	// if we see object
@@ -161,8 +171,8 @@ float CEnemyManager::evaluate(const CEntityAlive* object) const
 	float distance = m_object->Position().distance_to_sqr(object->Position());
 	return (
 		penalty +
-		distance / 100.f +
-		ai().ef_storage().m_pfVictoryProbability->ffGetValue() / 100.f
+		distance / 100.f
+		// + ai().ef_storage().m_pfVictoryProbability->ffGetValue() / 100.f //SkyKi: Removed to stop AI from locking onto heavily armed targets (like the player) across the map
 	);
 #else // USE_EVALUATOR
 	float					distance = m_object->Position().distance_to_sqr(object->Position());
@@ -214,7 +224,7 @@ void CEnemyManager::remove_links(CObject* object)
 	// we just use the pinter itself, we can just statically cast object
 	OBJECTS::iterator I = std::find(m_objects.begin(), m_objects.end(), (CEntityAlive*)object);
 	if (I != m_objects.end())
-		m_objects.erase(I);
+		m_objects.erase_fast(I);
 
 	if (m_last_enemy == object)
 		m_last_enemy = 0;
@@ -430,6 +440,13 @@ void CEnemyManager::try_change_enemy()
 
 	if (selected() != previous_selected)
 		m_object->on_enemy_change(previous_selected);
+
+	if (selected() != previous_selected)
+	{
+		::luabind::functor<void> funct;
+		if (ai().script_engine().functor("_G.CAI_Stalker__OnEnemySelected", funct))
+			funct(m_object->lua_game_object(), selected() ? selected()->lua_game_object() : nullptr);
+	}
 }
 
 void CEnemyManager::update()

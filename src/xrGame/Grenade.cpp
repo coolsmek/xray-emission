@@ -3,7 +3,6 @@
 #include "../xrphysics/PhysicsShell.h"
 //.#include "WeaponHUD.h"
 #include "entity.h"
-#include "ParticlesObject.h"
 #include "actor.h"
 #include "inventory.h"
 #include "level.h"
@@ -296,6 +295,7 @@ void CGrenade::OnAnimationEnd(u32 state)
 
 void CGrenade::UpdateCL()
 {
+	PROF_EVENT();
 	inherited::UpdateCL();
 	CExplosive::UpdateCL();
 

@@ -9,6 +9,7 @@
 
 #include "../../xrEngine/tntQAVI.h"
 #include "../../xrEngine/xrTheora_Surface.h"
+#include "gifPlayer.h"
 
 #include "dxRenderDeviceRender.h"
 
@@ -31,14 +32,16 @@ CTexture::CTexture()
 	pSurface = NULL;
 	pAVI = NULL;
 	pTheora = NULL;
+    gifPlayer = nullptr;
 	desc_cache = 0;
 	seqMSPF = 0;
 	flags.MemoryUsage = 0;
 	flags.bLoaded = false;
+	flags.bLoading = false;
 	flags.bUser = false;
 	flags.seqCycles = FALSE;
 	m_material = 1.0f;
-	bind = fastdelegate::FastDelegate1<u32>(this, &CTexture::apply_load);
+	bind = xr_make_delegate(this, &CTexture::apply_load);
 }
 
 CTexture::~CTexture()
@@ -51,6 +54,10 @@ CTexture::~CTexture()
 
 void CTexture::surface_set(ID3DBaseTexture* surf)
 {
+	while (flags.bLoading)
+	{
+		SwitchToThread();
+	}
 	if (surf) surf->AddRef();
 
 	_RELEASE(pSurface);
@@ -60,27 +67,46 @@ void CTexture::surface_set(ID3DBaseTexture* surf)
 
 ID3DBaseTexture* CTexture::surface_get()
 {
+	while (flags.bLoading)
+	{
+		SwitchToThread();
+	}
 	if (pSurface) pSurface->AddRef();
 	return pSurface;
 }
 
 void CTexture::PostLoad()
 {
-	if (pTheora) bind = fastdelegate::FastDelegate1<u32>(this, &CTexture::apply_theora);
-	else if (pAVI) bind = fastdelegate::FastDelegate1<u32>(this, &CTexture::apply_avi);
-	else if (!seqDATA.empty()) bind = fastdelegate::FastDelegate1<u32>(this, &CTexture::apply_seq);
-	else bind = fastdelegate::FastDelegate1<u32>(this, &CTexture::apply_normal);
+	if (pTheora) bind = xr_make_delegate(this, &CTexture::apply_theora);
+	else if (pAVI) bind = xr_make_delegate(this, &CTexture::apply_avi);
+	else if (!seqDATA.empty()) bind = xr_make_delegate(this, &CTexture::apply_seq);
+	else if (gifPlayer) bind = xr_make_delegate(this, &CTexture::apply_gif);
+	else bind = xr_make_delegate(this, &CTexture::apply_normal);
 }
 
 void CTexture::apply_load(u32 dwStage)
 {
-	if (!flags.bLoaded) Load();
-	else PostLoad();
-	bind(dwStage);
+    if (!flags.bLoaded) Load();
+    else PostLoad();
+    if (bind == xr_make_delegate(this, &CTexture::apply_load))
+    {
+        // This should not happen - if bind is still apply_load, fall back to apply_normal
+        // which will just apply the (potentially unloaded) surface
+        apply_normal(dwStage);
+    }
+    else
+    {
+        bind(dwStage);
+    }
 };
+
 
 void CTexture::apply_theora(u32 dwStage)
 {
+	while (flags.bLoading)
+	{
+		SwitchToThread();
+	}
 	if (pTheora->Update(m_play_time != 0xFFFFFFFF ? m_play_time : RDEVICE.dwTimeContinual))
 	{
 		R_ASSERT(D3DRTYPE_TEXTURE == pSurface->GetType());
@@ -106,6 +132,10 @@ void CTexture::apply_theora(u32 dwStage)
 
 void CTexture::apply_avi(u32 dwStage)
 {
+	while (flags.bLoading)
+	{
+		SwitchToThread();
+	}
 	if (pAVI->NeedUpdate())
 	{
 		R_ASSERT(D3DRTYPE_TEXTURE == pSurface->GetType());
@@ -128,6 +158,10 @@ void CTexture::apply_avi(u32 dwStage)
 
 void CTexture::apply_seq(u32 dwStage)
 {
+	while (flags.bLoading)
+	{
+		SwitchToThread();
+	}
 	// SEQ
 	u32 frame = RDEVICE.dwTimeContinual / seqMSPF; //RDEVICE.dwTimeGlobal
 	u32 frame_data = seqDATA.size();
@@ -145,8 +179,28 @@ void CTexture::apply_seq(u32 dwStage)
 	CHK_DX(HW.pDevice->SetTexture(dwStage,pSurface));
 };
 
+void CTexture::apply_gif(u32 dwStage)
+{
+    while (flags.bLoading)
+    {
+	SwitchToThread();
+    }
+    if (gifPlayer->UpdateFrame())
+    {
+        const CGIFAnimationPlayer::Frame* const gifFrame = gifPlayer->GetActiveFrame();
+        R_ASSERT(gifFrame);
+
+        pSurface = gifFrame->surface;
+    }
+    CHK_DX(HW.pDevice->SetTexture(dwStage, pSurface));
+}
+
 void CTexture::apply_normal(u32 dwStage)
 {
+	while (flags.bLoading)
+	{
+		SwitchToThread();
+	}
 	CHK_DX(HW.pDevice->SetTexture(dwStage,pSurface));
 };
 
@@ -158,16 +212,31 @@ void CTexture::Preload()
 
 void CTexture::Load()
 {
-	flags.bLoaded = true;
+	PROF_EVENT("CTexture::Load");
+	if (flags.bLoaded || flags.bLoading) return;
+	flags.bLoading = true;
+	flags.bLoaded = false;
 	desc_cache = 0;
-	if (pSurface) return;
+	if (pSurface)
+	{
+		flags.bLoading = false;
+		flags.bLoaded = true;
+		return;
+	}
 
 	flags.bUser = false;
 	flags.MemoryUsage = 0;
-	if (0 == stricmp(*cName, "$null")) return;
-	if (0 != strstr(*cName, "$user$"))
+	if (0==_stricmp(*cName,"$null"))
 	{
-		flags.bUser = true;
+		flags.bLoading = false;
+		flags.bLoaded = true;
+		return;
+	}
+	if (0!=strstr(*cName,"$user$"))	
+	{
+		flags.bUser	= true;
+		flags.bLoading = false;
+		flags.bLoaded = true;
 		return;
 	}
 
@@ -280,6 +349,24 @@ void CTexture::Load()
 			pSurface = 0;
 			FS.r_close(_fs);
 		}
+        else if (FS.exist(fn, "$game_textures$", *cName, ".gif"))
+        {
+            gifPlayer = xr_new<CGIFAnimationPlayer>();
+            if (!gifPlayer->Load(fn))
+            {
+                xr_delete(gifPlayer);
+                pSurface = nullptr;
+            }
+            else
+            {
+                flags.MemoryUsage = gifPlayer->GetUsedMemory();
+
+                gifPlayer->Play();
+
+                const CGIFAnimationPlayer::Frame* const gifFrame = gifPlayer->GetActiveFrame();
+                pSurface = gifFrame->surface;
+            }
+        }
 		else
 		{
 			// Normal texture
@@ -296,10 +383,21 @@ void CTexture::Load()
 		//#endif
 	}
 	PostLoad();
+	flags.bLoading = false;
+	flags.bLoaded = true;
 }
 
 void CTexture::Unload()
 {
+	while (flags.bLoading)
+	{
+		SwitchToThread();
+	}
+
+	// Already unloaded or never loaded: nothing to do.
+	if (!flags.bLoaded)
+		return;
+
 #ifdef DEBUG
 	string_path				msg_buff;
 	xr_sprintf				(msg_buff,sizeof(msg_buff),"* Unloading texture [%s] pSurface RefCount=",cName.c_str());
@@ -319,6 +417,12 @@ void CTexture::Unload()
 	}
 	flags.MemoryUsage = 0;
 
+    if (gifPlayer)
+    {
+        xr_delete(gifPlayer);
+        pSurface = nullptr;
+    }
+
 #ifdef DEBUG
 	_SHOW_REF		(msg_buff, pSurface);
 #endif // DEBUG
@@ -328,11 +432,15 @@ void CTexture::Unload()
 	xr_delete(pAVI);
 	xr_delete(pTheora);
 
-	bind = fastdelegate::FastDelegate1<u32>(this, &CTexture::apply_load);
+	bind = xr_make_delegate(this, &CTexture::apply_load);
 }
 
 void CTexture::desc_update()
 {
+	while (flags.bLoading)
+	{
+		SwitchToThread();
+	}
 	desc_cache = pSurface;
 	if (pSurface && (D3DRTYPE_TEXTURE == pSurface->GetType()))
 	{
@@ -343,20 +451,36 @@ void CTexture::desc_update()
 
 void CTexture::video_Play(BOOL looped, u32 _time)
 {
+	while (flags.bLoading)
+	{
+		SwitchToThread();
+	}
 	if (pTheora) pTheora->Play(looped, (_time != 0xFFFFFFFF) ? (m_play_time = _time) : RDEVICE.dwTimeContinual);
 }
 
 void CTexture::video_Pause(BOOL state)
 {
+	while (flags.bLoading)
+	{
+		SwitchToThread();
+	}
 	if (pTheora) pTheora->Pause(state);
 }
 
 void CTexture::video_Stop()
 {
+	while (flags.bLoading)
+	{
+		SwitchToThread();
+	}
 	if (pTheora) pTheora->Stop();
 }
 
 BOOL CTexture::video_IsPlaying()
 {
+	while (flags.bLoading)
+	{
+		SwitchToThread();
+	}
 	return (pTheora) ? pTheora->IsPlaying() : FALSE;
 }

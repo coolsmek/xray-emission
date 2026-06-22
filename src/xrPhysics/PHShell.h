@@ -158,6 +158,10 @@ public:
 
 	virtual void applyImpulse(const Fvector& dir, float val);
 	virtual void _BCL applyGravityAccel(const Fvector& accel);
+
+    float m_fScale;
+    virtual void SetScale(float scale);
+
 	virtual void setTorque(const Fvector& torque);
 	virtual void setForce(const Fvector& force);
 
@@ -269,7 +273,7 @@ public:
 	virtual void SmoothElementsInertia(float k);
 	virtual void _BCL InterpolateGlobalTransform(Fmatrix* m);
 	virtual void InterpolateGlobalPosition(Fvector* v);
-	virtual void AnimatorOnFrame();
+	virtual void AnimatorOnFrame(bool calculate_bones = true);
 	virtual void GetGlobalTransformDynamic(Fmatrix* m);
 	virtual void GetGlobalPositionDynamic(Fvector* v);
 	virtual Fmatrix& ObjectInRoot() { return m_object_in_root; }
@@ -286,6 +290,7 @@ public:
 	virtual bool HasTracedGeoms() { return !m_traced_geoms.empty(); }
 
 	virtual void SetPrefereExactIntegration();
+	virtual void SetForceExactIntegration();
 	virtual void CutVelocity(float l_limit, float a_limit);
 	///////////	//////////////////////////////////////////////////////////////////////////////////////////
 	void CreateSpace();

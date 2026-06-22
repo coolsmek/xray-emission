@@ -491,7 +491,7 @@ void CLocatorAPI::ProcessArchive(LPCSTR _path)
 	}
 	// g_temporary_stuff = g_temporary_stuff_subst;
 
-	if (bProcessArchiveLoading || strstr(Core.Params, "-auto_load_arch"))
+	if (bProcessArchiveLoading || Core.ParamsData.test(ECoreParams::auto_load_arch))
 		LoadArchive(A);
 	else
 		A.close();
@@ -850,7 +850,7 @@ void CLocatorAPI::_initialize(u32 flags, LPCSTR target_folder, LPCSTR fs_name)
 
 	Msg("Init FileSystem %f sec", t.GetElapsed_sec());
 	//-----------------------------------------------------------
-	if (strstr(Core.Params, "-overlaypath"))
+	if (Core.ParamsData.test(ECoreParams::overlaypath))
 	{
 		string1024 c_newAppPathRoot;
 		sscanf(strstr(Core.Params, "-overlaypath ") + 13, "%[^ ] ", c_newAppPathRoot);
@@ -869,12 +869,15 @@ void CLocatorAPI::_initialize(u32 flags, LPCSTR target_folder, LPCSTR fs_name)
 	rec_files.clear();
 	//-----------------------------------------------------------
 
-	CreateLog(0 != strstr(Core.Params, "-nolog"));
+	if (!Core.ParamsData.test(ECoreParams::nolog))
+	{
+		xrLogger::OpenLogFile();
+	}
 }
 
 void CLocatorAPI::_destroy()
 {
-	CloseLog();
+	xrLogger::CloseLog();
 
 	for (files_it I = m_files.begin(); I != m_files.end(); I++)
 	{
@@ -1344,6 +1347,7 @@ bool CLocatorAPI::check_for_file(LPCSTR path, LPCSTR _fname, string_path& fname,
 template <typename T>
 T* CLocatorAPI::r_open_impl(LPCSTR path, LPCSTR _fname)
 {
+	PROF_EVENT("r_open_impl");
 	T* R = 0;
 	string_path fname;
 	const file* desc = 0;

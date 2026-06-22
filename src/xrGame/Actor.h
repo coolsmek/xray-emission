@@ -107,6 +107,9 @@ public:
 	virtual CActor* cast_actor() { return this; }
 	virtual CGameObject* cast_game_object() { return this; }
 	virtual IInputReceiver* cast_input_receiver() { return this; }
+	virtual CEntityAlive* cast_entity_alive() { return this; }
+	virtual CEntity* cast_entity() { return this; }
+	virtual CPhraseDialogManager* cast_phrase_dialog_manager() { return this; }
 	virtual CCharacterPhysicsSupport* character_physics_support() { return m_pPhysics_support; }
 	virtual CCharacterPhysicsSupport* character_physics_support() const { return m_pPhysics_support; }
 	virtual CPHDestroyable* ph_destroyable();
@@ -119,7 +122,7 @@ public:
 public:
 
 	virtual void Load(LPCSTR section);
-	virtual void RenderCamAttached();
+	virtual void RenderCamAttached(IDSGraphManager* DM);
 
 	virtual void shedule_Update(u32 T);
 	virtual void UpdateCL();
@@ -127,7 +130,7 @@ public:
 	virtual void OnEvent(NET_Packet& P, u16 type);
 
 	// Render
-	virtual void renderable_Render();
+	virtual void renderable_Render(IDSGraphManager* DM);
 	virtual BOOL renderable_ShadowGenerate();
 	virtual bool AllowActorShadow();
 	virtual void feel_sound_new(CObject* who, int type, CSound_UserDataPtr user_data, const Fvector& Position,
@@ -336,7 +339,7 @@ public:
 	void g_SetAnimation(u32 mstate_rl);
 	void g_SetSprintAnimation(u32 mstate_rl, MotionID& head, MotionID& torso, MotionID& legs);
 public:
-	virtual void OnHUDDraw(CCustomHUD* hud);
+	virtual void OnHUDDraw(CCustomHUD* hud, IDSGraphManager* DM);
 	BOOL HUDview() const;
 
 	//visiblity 
@@ -797,7 +800,7 @@ public:
 private:
 	collide::rq_results RQR;
 	BOOL CanPickItem(const CFrustum& frustum, const Fvector& from, CObject* item);
-	xr_vector<ISpatial*> ISpatialResult;
+	xr_vector<ISpatialShared> ISpatialResult;
 
 private:
 	CLocationManager* m_location_manager;

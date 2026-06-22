@@ -1,7 +1,6 @@
 #include "stdafx.h"
 #include "WeaponAutomaticShotgun.h"
 #include "entity.h"
-#include "ParticlesObject.h"
 #include "xr_level_controller.h"
 #include "inventory.h"
 #include "level.h"
@@ -49,7 +48,7 @@ void CWeaponAutomaticShotgun::Load(LPCSTR section)
 
 bool CWeaponAutomaticShotgun::Action(u16 cmd, u32 flags)
 {
-    if (cmd == kWPN_FIRE && GetState() == eReload) // ver
+    if (cmd == kWPN_FIRE && flags & CMD_START && GetState() == eReload) // ver
     {
         ClickInterruptFlag = true; // ver
     }
@@ -285,6 +284,7 @@ void CWeaponAutomaticShotgun::OnMotionMark(u32 state, const motion_marks& M)
 
     //Msg("motion mark detected on reload!");
     inherited::OnMotionMark(state, M);
+    
     if (state == eIdle)
     {
         bMisfire = false;
@@ -294,9 +294,8 @@ void CWeaponAutomaticShotgun::OnMotionMark(u32 state, const motion_marks& M)
         return;
     }
 
-
-
-    if ((m_sub_state == eSubstateReloadInProcess || m_sub_state == eSubstateReloadBegin) && (state == eReload))
+    shared_str reloadMarkName = READ_IF_EXISTS(pSettings, r_string, cNameSect(), "motion_mark_reload", "");
+    if ((m_sub_state == eSubstateReloadInProcess || m_sub_state == eSubstateReloadBegin) && (state == eReload) && (reloadMarkName.size() == 0 || reloadMarkName == M.name))
     {
         AddCartridge(1);
         m_sub_state = eSubstateReloadBegin;
@@ -304,7 +303,6 @@ void CWeaponAutomaticShotgun::OnMotionMark(u32 state, const motion_marks& M)
         //Msg("AddCartridge from motion mark!");
     }
     //SwitchState(eReload);
-
 
 }
 

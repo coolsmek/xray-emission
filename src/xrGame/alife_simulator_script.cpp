@@ -43,6 +43,7 @@ CSE_ALifeDynamicObject* alife_object(const CALifeSimulator* self, ALife::_OBJECT
 	if (object_id == 0xffff)
 	{
 		Msg("alife():object(id) ! invalid id specified");
+        ai().script_engine().print_stack();
 		return (0);
 	}
 	return (self->objects().object(object_id, true));
@@ -340,7 +341,10 @@ bool has_info(const CALifeSimulator* self, const ALife::_OBJECT_ID& id, LPCSTR i
 	if (!known_info)
 		return (false);
 
-	if (std::find_if(known_info->begin(), known_info->end(), CFindByIDPred(info_id)) == known_info->end())
+	static shared_str has_info;
+	has_info = info_id;
+
+	if (std::find_if(known_info->begin(), known_info->end(), CFindByIDPred(has_info)) == known_info->end())
 		return (false);
 
 	return (true);
@@ -359,7 +363,10 @@ void AlifeGiveInfo(const CALifeSimulator *alife, const ALife::_OBJECT_ID &id, LP
 	if (!known_info)
 		return;
 
-	if (std::find_if(known_info->begin(), known_info->end(), CFindByIDPred(info_id)) == known_info->end())
+	static shared_str AlifeGiveInfo;
+	AlifeGiveInfo = info_id;
+
+	if (std::find_if(known_info->begin(), known_info->end(), CFindByIDPred(AlifeGiveInfo)) == known_info->end())
 	{
 		known_info->push_back(info_id);
 	}
@@ -372,7 +379,11 @@ void AlifeRemoveInfo(const CALifeSimulator *alife, const ALife::_OBJECT_ID &id, 
 	KNOWN_INFO_VECTOR	*known_info = alife->registry().get<CInfoPortionRegistry>().object(id, true);
 	if (!known_info)
 		return;
-	known_info->erase(std::find_if(known_info->begin(), known_info->end(), CFindByIDPred(info_id)),known_info->end());
+
+	static shared_str AlifeRemoveInfo;
+	AlifeRemoveInfo = info_id;
+
+	known_info->erase(std::find_if(known_info->begin(), known_info->end(), CFindByIDPred(AlifeRemoveInfo)),known_info->end());
 }
 
 //Alundaio: teleport object
@@ -471,6 +482,19 @@ void CALifeSimulator__iterate_objects_without_actor(const CALifeSimulator* self,
 	const CALifeObjectRegistry& objects = self->objects();
 	for (const auto& se_obj : objects.objects()) {
 		if (se_obj.first != 0 && functor(se_obj.second)) break;
+	}
+}
+
+// iterate alife objects on actor's current level filtered by script clsid;
+// functor must not release iterated object (would invalidate iterator)
+void CALifeSimulator__iterate_level_objects_of_clsid(
+	const CALifeSimulator* self, int script_clsid_val, const luabind::functor<bool>& functor)
+{
+	if (!self->graph().level_exists()) return;
+	const auto& level_reg = self->graph().level();
+	for (const auto& entry : level_reg.objects()) {
+		if (entry.second->m_script_clsid != script_clsid_val) continue;
+		if (functor(entry.second)) break;
 	}
 }
 
@@ -628,7 +652,7 @@ void CALifeSimulator::script_register(lua_State* L)
 		.def("set_switch_distance", &CALifeSimulator::set_switch_distance)
 		//Alundaio: renamed to set_switch_distance from switch_distance
 		//Alundaio: extend alife simulator exports
-		.def("teleport_object", &teleport_object)
+		.def("teleport_object", &::teleport_object)
 		.def("iterate_info", &IterateInfo)
 		.def("clone_weapon", &try_to_clone_object)
 		.def("register", &reprocess_spawn)
@@ -643,6 +667,7 @@ void CALifeSimulator::script_register(lua_State* L)
 		.def("object_ids", &alife_object_ids)
 		.def("objects", &alife_objects)
 		.def("iterate_objects", &CALifeSimulator__iterate_objects)
+		.def("iterate_level_objects_of_clsid", &CALifeSimulator__iterate_level_objects_of_clsid)
 		/*.def("iterate_objects_without_actor", &CALifeSimulator__iterate_objects_without_actor)
 		.def("objects_iter", &alife_object_iter)
 		.def("objects_without_actor_iter", &alife_object_without_actor_iter)*/

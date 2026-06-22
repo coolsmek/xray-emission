@@ -236,6 +236,7 @@ public:
 		void SteerRight();
 		void SteerLeft();
 		void SteerIdle();
+		void SteerTo(float k);
 		void Limit();
 
 		void Load(LPCSTR /*section*/)
@@ -260,7 +261,7 @@ public:
 		u16 bone_id;
 		Fmatrix transform;
 		//Fvector				velocity;
-		CParticlesObject* p_pgobject;
+		intrusive_ptr<CParticlesObject> p_pgobject;
 		CPhysicsElement* pelement;
 		CCar* pcar;
 		void Init();
@@ -466,6 +467,9 @@ private:
 
 	float m_steering_speed;
 	float m_ref_radius;
+	bool m_speed_governed;
+	float m_target_speed;
+	float m_throttle;
 	size_t m_current_transmission_num;
 	///////////////////////////////////////////////////
 	CCarLights m_lights;
@@ -610,7 +614,7 @@ public:
 	virtual void UpdateEx(float fov); //called by owner
 
 	virtual void shedule_Update(u32 dt);
-	virtual void renderable_Render();
+	virtual void renderable_Render(IDSGraphManager* DM);
 	virtual bool bfAssignMovement(CScriptEntityAction* tpEntityAction);
 	virtual bool bfAssignObject(CScriptEntityAction* tpEntityAction);
 
@@ -644,6 +648,17 @@ public:
 	float FireDirDiff();
 	bool isObjectVisible(CScriptGameObject* O);
 	Fvector CurrentVel();
+	float GetSpeed();
+	void SetTargetSpeed(float mps);
+	void ClearTargetSpeed();
+	void SetThrottle(float k);
+	void SetSteer(float k);
+	// wheel-ground friction multiplier (SWheelCollisionParams::mu_factor)
+	float GetWheelFriction();
+	void SetWheelFriction(float mu_factor);
+	bool IsSpeedGoverned() const { return m_speed_governed; }
+	float ThrottleFactor() const { return m_throttle; }
+	float DriveRefSpeed();
 	virtual float GetfHealth() const { return CEntity::GetfHealth(); };
 	virtual float SetfHealth(float value) { return CEntity::SetfHealth(value); };
 
@@ -661,7 +676,7 @@ public:
 	};
 	virtual u16 Initiator();
 	// HUD
-	virtual void OnHUDDraw(CCustomHUD* hud);
+	virtual void OnHUDDraw(CCustomHUD* hud, IDSGraphManager* DM);
 
 	CCameraBase* Camera() { return active_camera; }
 	void SetExplodeTime(u32 et);
@@ -687,6 +702,14 @@ public:
 
 public:
 	virtual CEntity* cast_entity() { return this; }
+	virtual CGameObject* cast_game_object() { return this; }
+	virtual CExplosive* cast_explosive() { return this; }
+	virtual CPhysicsShellHolder* cast_physics_shell_holder() { return this; }
+	virtual CParticlesPlayer* cast_particles_player() { return this; }
+	virtual CScriptEntity* cast_script_entity() { return this; }
+	virtual IDamageSource* cast_IDamageSource() { return this; }
+	virtual CHolderCustom* cast_holder_custom() { return this; }
+	virtual CCar* cast_car() { return this; }
 private:
 	template <class T>
 	IC void fill_wheel_vector(LPCSTR S, xr_vector<T>& type_wheels);
@@ -698,13 +721,6 @@ private:
 
 	virtual void reinit();
 	virtual void reload(LPCSTR section);
-	virtual CGameObject* cast_game_object() { return this; }
-	virtual CExplosive* cast_explosive() { return this; }
-	virtual CPhysicsShellHolder* cast_physics_shell_holder() { return this; }
-	virtual CParticlesPlayer* cast_particles_player() { return this; }
-	virtual CScriptEntity* cast_script_entity() { return this; }
-	virtual IDamageSource* cast_IDamageSource() { return this; }
-	virtual CHolderCustom* cast_holder_custom() { return this; }
 
 private:
 	car_memory* m_memory;

@@ -24,7 +24,7 @@
 
 using namespace StalkerSpace;
 
-const float start_fire_angle_difference = PI_DIV_8;
+float g_ai_aim_fire_angle = PI_DIV_8; // Replaced start_fire_angle_difference constant for Modded Exes config
 
 CStalkerActionCombatBase::CStalkerActionCombatBase(CAI_Stalker* object, LPCSTR action_name) :
 	inherited(object, action_name)
@@ -60,7 +60,7 @@ void CStalkerActionCombatBase::fire()
 	float yaw, pitch;
 	direction.getHP(yaw, pitch);
 	const MonsterSpace::SBoneRotation& current_angles = object().movement().head_orientation();
-	if (angle_difference(-yaw, current_angles.current.yaw) > start_fire_angle_difference)
+	if (angle_difference(-yaw, current_angles.current.yaw) > g_ai_aim_fire_angle)
 	{
 		aim_ready();
 		return;
@@ -256,35 +256,40 @@ void CStalkerActionCombatBase::play_panic_sound(u32 max_start_time, u32 min_star
 }
 
 void CStalkerActionCombatBase::play_attack_sound(u32 max_start_time, u32 min_start_time, u32 max_stop_time,
-                                                 u32 min_stop_time, u32 id)
+    u32 min_stop_time, u32 id)
 {
-	if (!object().memory().enemy().selected()->human_being())
-		return;
+    if (!object().memory().enemy().selected()->human_being())
+        return;
 
-	if (!object().agent_manager().member().can_cry_noninfo_phrase())
-		return;
+    if (!object().agent_manager().member().can_cry_noninfo_phrase())
+        return;
 
-	u32 sound_type = eStalkerSoundAttackNoAllies;
+    u32 sound_type = eStalkerSoundAttackNoAllies;
 #ifdef DEBUG
-	if (object().agent_manager().member().combat_members().empty())
-		Msg					(
-			"! I am in combat, but there is no combat members at all (including me), npc[%s],team[%d],squad[%d],group[%d]",
-			*object().cName(),
-			object().g_Team(),
-			object().g_Squad(),
-			object().g_Group()
-		);
+    {
+        if (object().agent_manager().member().combat_members().empty())
+            Msg(
+                "! I am in combat, but there is no combat members at all (including me), npc[%s],team[%d],squad[%d],group[%d]",
+                *object().cName(),
+                object().g_Team(),
+                object().g_Squad(),
+                object().g_Group()
+            );
+    }
 #endif // DEBUG
 
-	if (object().agent_manager().member().combat_members().size() > 1)
-	{
-		if (object().agent_manager().enemy().enemies().size() > 1)
-			sound_type = eStalkerSoundAttackAlliesSeveralEnemies;
-		else
-			sound_type = eStalkerSoundAttackAlliesSingleEnemy;
-	}
-	else
-		sound_type = eStalkerSoundAttackNoAllies;
+    {
+        
+        if (object().agent_manager().member().combat_members().size() > 1)
+        {
+            if (object().agent_manager().enemy().enemies().size() > 1)
+                sound_type = eStalkerSoundAttackAlliesSeveralEnemies;
+            else
+                sound_type = eStalkerSoundAttackAlliesSingleEnemy;
+        }
+        else
+            sound_type = eStalkerSoundAttackNoAllies;
+    }
 
 	object().sound().play(
 		sound_type,
@@ -297,22 +302,29 @@ void CStalkerActionCombatBase::play_attack_sound(u32 max_start_time, u32 min_sta
 }
 
 void CStalkerActionCombatBase::play_start_search_sound(u32 max_start_time, u32 min_start_time, u32 max_stop_time,
-                                                       u32 min_stop_time, u32 id)
+    u32 min_stop_time, u32 id)
 {
-	if (!object().agent_manager().member().can_cry_noninfo_phrase())
-		return;
+    if (!object().agent_manager().member().can_cry_noninfo_phrase())
+        return;
 
 #ifdef DEBUG
-	if (object().agent_manager().member().combat_members().empty())
-		Msg					("! I am in combat, but there is no combat members at all (including me), npc[%s],team[%d],squad[%d],group[%d]",
-			*object().cName(),
-			object().g_Team(),
-			object().g_Squad(),
-			object().g_Group()
-		);
+    {
+        
+        if (object().agent_manager().member().combat_members().empty())
+            Msg("! I am in combat, but there is no combat members at all (including me), npc[%s],team[%d],squad[%d],group[%d]",
+                *object().cName(),
+                object().g_Team(),
+                object().g_Squad(),
+                object().g_Group()
+            );
+    }
 #endif // DEBUG
 
-	bool search_with_allies = object().agent_manager().member().combat_members().size() > 1;
+    bool search_with_allies;
+    {
+        
+        search_with_allies = object().agent_manager().member().combat_members().size() > 1;
+    }
 
 	object().sound().play(
 		search_with_allies ? eStalkerSoundSearch1WithAllies : eStalkerSoundSearch1NoAllies,
@@ -325,22 +337,29 @@ void CStalkerActionCombatBase::play_start_search_sound(u32 max_start_time, u32 m
 }
 
 void CStalkerActionCombatBase::play_enemy_lost_sound(u32 max_start_time, u32 min_start_time, u32 max_stop_time,
-                                                     u32 min_stop_time, u32 id)
+    u32 min_stop_time, u32 id)
 {
-	if (!object().agent_manager().member().can_cry_noninfo_phrase())
-		return;
+    if (!object().agent_manager().member().can_cry_noninfo_phrase())
+        return;
 
 #ifdef DEBUG
-	if (object().agent_manager().member().combat_members().empty())
-		Msg					("! I am in combat, but there is no combat members at all (including me), npc[%s],team[%d],squad[%d],group[%d]",
-			*object().cName(),
-			object().g_Team(),
-			object().g_Squad(),
-			object().g_Group()
-		);
+    {
+        
+        if (object().agent_manager().member().combat_members().empty())
+            Msg("! I am in combat, but there is no combat members at all (including me), npc[%s],team[%d],squad[%d],group[%d]",
+                *object().cName(),
+                object().g_Team(),
+                object().g_Squad(),
+                object().g_Group()
+            );
+    }
 #endif // DEBUG
 
-	bool search_with_allies = object().agent_manager().member().combat_members().size() > 1;
+    bool search_with_allies;
+    {
+        
+        search_with_allies = object().agent_manager().member().combat_members().size() > 1;
+    }	
 
 	object().sound().play(
 		search_with_allies ? eStalkerSoundEnemyLostWithAllies : eStalkerSoundEnemyLostNoAllies,

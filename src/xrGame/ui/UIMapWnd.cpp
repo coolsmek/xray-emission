@@ -326,6 +326,19 @@ void CUIMapWnd::MoveMap(Fvector2 const& pos_delta)
 	GlobalMap()->MoveWndDelta(pos_delta);
 	UpdateScroll();
 	HideCurHint();
+
+	// Cancel any in-progress zoom/pan easing. Without this the action planner
+	// would lerp the map rect back toward m_desiredMapRect on the next Update,
+	// fighting the user's drag input and causing visible bounce-back.
+	Frect vis_rect = ActiveMapRect();
+	vis_rect.getcenter(m_tgtCenter);
+	Fvector2 pos;
+	GlobalMap()->GetAbsolutePos(pos);
+	m_tgtCenter.sub(pos);
+	m_tgtCenter.div(GlobalMap()->GetCurrentZoom());
+	m_ActionPlanner->m_storage.set_property(1, true);
+	m_ActionPlanner->m_storage.set_property(2, false);
+	m_ActionPlanner->m_storage.set_property(3, false);
 }
 
 void CUIMapWnd::Draw()
@@ -440,9 +453,7 @@ bool CUIMapWnd::OnMouseAction(float x, float y, EUIMessages mouse_action)
 		case WINDOW_MOUSE_MOVE:
 			if (pInput->iGetAsyncBtnState(0))
 			{
-				GlobalMap()->MoveWndDelta(GetUICursor().GetCursorPositionDelta());
-				UpdateScroll();
-				HideCurHint();
+				MoveMap(GetUICursor().GetCursorPositionDelta());
 				return true;
 			}
 			break;
@@ -978,14 +989,21 @@ void CUIMapWnd::Reset()
 void CUIMapWnd::SpotSelected(CUIWindow* w)
 {
 	CMapSpot* sp = smart_cast<CMapSpot*>(w);
-	if (!sp)
+	if (!sp || !sp->MapLocation())
 	{
 		return;
 	}
+	CMapLocation* ml = sp->MapLocation();
 
-	CGameTask* t = Level().GameTaskManager().HasGameTask(sp->MapLocation(), true);
+	CGameTask* t = Level().GameTaskManager().HasGameTask(ml, true);
 	if (t)
 	{
 		Level().GameTaskManager().SetActiveTask(t);
 	}
+
+	::luabind::functor<void> funct;
+	if (ai().script_engine().functor("pda.map_spot_selected", funct))
+		funct(ml->ObjectID(),
+			ml->GetLevelName().c_str(),
+			ml->spot_type);
 }

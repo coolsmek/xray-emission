@@ -185,6 +185,8 @@ public:
 	virtual CAI_Stalker* cast_stalker() { return this; }
 	virtual CCustomMonster* cast_custom_monster() { return this; }
 	virtual CScriptEntity* cast_script_entity() { return this; }
+	virtual CPhraseDialogManager* cast_phrase_dialog_manager() { return this; }
+	virtual CAI_PhraseDialogManager* cast_ai_phrase_dialog_manager() { return this; }
 
 public:
 	void init();
@@ -223,7 +225,7 @@ public:
 	virtual void feel_touch_new(CObject* O);
 	virtual void feel_touch_delete(CObject* O);
 	void on_ownership_reject(CObject* O, bool just_before_destroy);
-	virtual void renderable_Render();
+	virtual void renderable_Render(IDSGraphManager* DM);
 	virtual void Exec_Look(float dt);
 	virtual void Hit(SHit* pHDS);
 	virtual void PHHit(SHit& H);
@@ -237,7 +239,7 @@ public:
 	bool LookAtActorLuaResult = true;
 
 #ifdef DEBUG
-	virtual void						OnHUDDraw							(CCustomHUD* hud);
+	virtual void						OnHUDDraw							(CCustomHUD* hud, IDSGraphManager* DM);
 	virtual void						OnRender							();
 			void						debug_text							();
 			bool						m_dbg_hud_draw						;
@@ -306,6 +308,10 @@ public:
 
 	bool undetected_anomaly();
 	bool inside_anomaly();
+
+	// anomaly detection (bolt throwing) state
+	u32 m_anomaly_detect_start_time;
+	u32 m_anomaly_detect_suppress_until;
 
 private:
 	bool m_can_kill_member;
@@ -648,8 +654,8 @@ public:
 	IC float auto_queue_fire_dist_med() const;
 	IC float auto_queue_fire_dist_far() const;
 public:
-	typedef fastdelegate::FastDelegate<void (const CCoverPoint*, const CCoverPoint*)> on_best_cover_changed_delegate;
-	typedef fastdelegate::FastDelegate<bool (SHit const*)> HitCallback;
+	typedef xr_delegate<void (const CCoverPoint*, const CCoverPoint*)> on_best_cover_changed_delegate;
+	typedef xr_delegate<bool (SHit const*)> HitCallback;
 
 private:
 	typedef xr_vector<on_best_cover_changed_delegate> cover_delegates;
@@ -836,7 +842,7 @@ public:
 	bool use_smart_covers_only() const;
 
 public:
-	typedef fastdelegate::FastDelegate<void (Fmatrix&)> EyeMatrixCallback;
+	typedef xr_delegate<void (Fmatrix&)> EyeMatrixCallback;
 
 private:
 	virtual BOOL AlwaysTheCrow();

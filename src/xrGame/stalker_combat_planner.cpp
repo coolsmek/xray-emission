@@ -99,7 +99,17 @@ void CStalkerCombatPlanner::execute()
 
 void CStalkerCombatPlanner::update()
 {
+	const bool was_initialized = initialized();
+	const u32 previous_action_id = was_initialized ? current_action_id() : u32(-1);
+
 	inherited::update();
+
+	if (was_initialized && initialized() && current_action_id() != previous_action_id)
+	{
+		::luabind::functor<void> funct;
+		if (ai().script_engine().functor("_G.CAI_Stalker__OnCombatActionChanged", funct))
+			funct(object().lua_game_object(), previous_action_id, current_action_id());
+	}
 
 	object().react_on_grenades();
 	object().react_on_member_death();
@@ -154,8 +164,11 @@ void CStalkerCombatPlanner::initialize()
 
 	m_loaded = false;
 
-	if (!object().agent_manager().member().combat_members().empty())
-		CScriptActionPlanner::m_storage.set_property(eWorldPropertyUseSuddenness, false);
+    {
+        
+        if (!object().agent_manager().member().combat_members().empty())
+            CScriptActionPlanner::m_storage.set_property(eWorldPropertyUseSuddenness, false);
+    }
 
 	//  this is possible when i enter combat when it is wait after combat stage
 	//	VERIFY					(object().memory().enemy().selected());

@@ -145,6 +145,8 @@ class XRPHYSICS_API CPhysicsElement :
 {
 public:
 	u16 m_SelfID;
+    float m_fScale;
+    virtual void SetScale(float scale) = 0;
 	virtual CPhysicsShell* PhysicsShell() = 0;
 	virtual void set_ContactCallback(ContactCallbackFun* callback) = 0;
 	virtual IPhysicsShellHolder* PhysicsRefObject() = 0;
@@ -351,7 +353,7 @@ public:
 	virtual void CreateShellAnimator(CInifile const* ini, LPCSTR section) = 0;
 	virtual void SetIgnoreAnimated() = 0;
 	//	virtual			bool						Animated									()																							= 0;
-	virtual void AnimatorOnFrame() = 0;
+	virtual void AnimatorOnFrame(bool calculate_bones = true) = 0;
 	virtual void SetSmall() = 0;
 	virtual void SetIgnoreSmall() = 0;
 	virtual bool isFractured() = 0;
@@ -433,6 +435,7 @@ public:
 	virtual Fmatrix& ObjectInRoot() = 0;
 	virtual void ObjectToRootForm(const Fmatrix& form) = 0;
 	virtual void SetPrefereExactIntegration() = 0;
+	virtual void SetForceExactIntegration() = 0;
 	virtual ~CPhysicsShell();
 	//build_FromKinematics		in returns elements  & joint pointers according bone IDs;
 	//	DECLARE_SCRIPT_REGISTER_FUNCTION

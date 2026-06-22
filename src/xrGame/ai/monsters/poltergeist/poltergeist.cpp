@@ -315,10 +315,10 @@ void CPoltergeist::Show()
 	ability()->on_show();
 }
 
-void CPoltergeist::renderable_Render()
+void CPoltergeist::renderable_Render(IDSGraphManager* DM)
 {
 	Visual()->getVisData().hom_frame = Device.dwFrame;
-	inherited::renderable_Render();
+	inherited::renderable_Render(DM);
 }
 
 void CPoltergeist::UpdateCL()
@@ -384,6 +384,7 @@ BOOL CPoltergeist::net_Spawn(CSE_Abstract* DC)
 void CPoltergeist::net_Destroy()
 {
 	inherited::net_Destroy();
+    CTelekinesis::remove_object_callbacks();
 	CTelekinesis::deactivate();
 	Energy::disable();
 
@@ -412,6 +413,7 @@ void CPoltergeist::Die(CObject* who)
 	}
 
 	inherited::Die(who);
+    CTelekinesis::remove_object_callbacks();
 	CTelekinesis::deactivate();
 	Energy::disable();
 
