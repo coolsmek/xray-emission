@@ -82,6 +82,9 @@ void CHW::CreateDevice(HWND hw, bool move_window)
     vkGetPhysicalDeviceMemoryProperties(m_vkPhysDevice, &m_vkMemProps);
     Msg("* VK: GPU selected: %s", m_vkDevProps.deviceName);
 
+    // Populate engine capability profile from Vulkan device properties
+    Caps.Update();
+
     // Logical device
     float queuePriority = 1.0f;
     xr_vector<VkDeviceQueueCreateInfo> queueCIs;
@@ -478,13 +481,17 @@ void CHW::vk_DestroySyncObjects()
 
 // ─── Present ──────────────────────────────────────────────────────────────────
 
-VkResult CHW::vk_Present()
+// imageIndex must be the value returned by vkAcquireNextImageKHR immediately before command
+// recording for this frame. Swapchain image ordering is driver-defined and never guaranteed
+// to match the frame counter, so deriving it from m_vkCurrentFrame % m_vkSCImageCount is wrong.
+VkResult CHW::vk_Present(uint32_t imageIndex)
 {
-    uint32_t imageIndex = m_vkCurrentFrame % m_vkSCImageCount;
+    const uint32_t frameSlot = m_vkCurrentFrame % MAX_FRAMES_IN_FLIGHT;
+
     VkPresentInfoKHR pi{};
     pi.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     pi.waitSemaphoreCount = 1;
-    pi.pWaitSemaphores    = &m_vkRenderFinished[m_vkCurrentFrame % MAX_FRAMES_IN_FLIGHT];
+    pi.pWaitSemaphores    = &m_vkRenderFinished[frameSlot];
     pi.swapchainCount     = 1;
     pi.pSwapchains        = &m_vkSwapchain;
     pi.pImageIndices      = &imageIndex;

@@ -107,7 +107,57 @@ u32 GetGpuNum()
 #endif
 }
 
-#if !defined(USE_DX10) && !defined(USE_DX11)
+#if defined(USE_VK)
+void CHWCaps::Update()
+{
+    // Vulkan 1.4 is equivalent to DX11 Feature Level 11_0 or better.
+    // Populate legacy CHWCaps fields so engine boot checks don't crash-loop.
+
+    geometry_major          = 5;
+    geometry_minor          = 0;
+    geometry.bSoftware      = FALSE;
+    geometry.bPointSprites  = FALSE;
+    geometry.bNPatches      = FALSE;
+    geometry.dwRegisters    = 256;
+    geometry.dwInstructions = 256;
+    geometry.dwClipPlanes   = 8;
+    geometry.bVTF           = TRUE;
+    geometry.dwVertexCache  = 32;
+
+    raster_major            = 5;
+    raster_minor            = 0;
+    raster.dwStages         = 16;
+    raster.bNonPow2         = TRUE;
+    raster.bCubemap         = TRUE;
+    raster.dwMRT_count      = 8;
+    raster.b_MRT_mixdepth   = TRUE;
+    raster.dwInstructions   = 4096;
+
+    // Pull vendor/device IDs directly from VkPhysicalDeviceProperties
+    id_vendor               = HW.m_vkDevProps.vendorID;
+    id_device               = HW.m_vkDevProps.deviceID;
+
+    bStencil                = TRUE;
+    bScissor                = TRUE;
+    bTableFog               = FALSE;
+
+    soInc                   = D3DSTENCILOP_INCRSAT;
+    soDec                   = D3DSTENCILOP_DECRSAT;
+    dwMaxStencilValue       = (1 << 8) - 1;
+
+    bForceGPU_REF           = FALSE;
+    bForceGPU_SW            = FALSE;
+    bForceGPU_NonPure       = FALSE;
+
+    Msg("* VK caps: vs(%d.%d), ps(%d.%d), MRT(%d), vendor=0x%X device=0x%X",
+        geometry_major, geometry_minor,
+        raster_major,   raster_minor,
+        raster.dwMRT_count,
+        id_vendor, id_device);
+
+    iGPUNum = GetGpuNum();
+}
+#elif !defined(USE_DX10) && !defined(USE_DX11)
 void CHWCaps::Update()
 {
 	D3DCAPS9 caps;

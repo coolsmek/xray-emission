@@ -217,8 +217,9 @@ public:
 	// Memory helper
 	uint32_t		vk_FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags props) const;
 
-	// Present — called by CRender at end of frame
-	VkResult		vk_Present();
+	// Present — called by CRender at end of frame.
+	// imageIndex must be the value returned by vkAcquireNextImageKHR, not derived from the frame counter.
+	VkResult		vk_Present(uint32_t imageIndex);
 #endif	//	USE_VK
 
 private:
