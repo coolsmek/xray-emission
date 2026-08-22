@@ -276,6 +276,51 @@ public:
 	IC bool CursorOverWindow() const { return m_bCursorOverWindow; }
 	IC u32 FocusReceiveTime() const { return m_dwFocusReceiveTime; }
 
+	// Optional convex hit polygon (absolute coords, any vertex count): the cursor must also be inside
+	// it to hover or receive mouse actions.
+	IC void SetHitClip(const Fvector2* pts, u32 count)
+	{
+		if (count >= 3)
+		{
+			Fvector2 lo = pts[0];
+			Fvector2 hi = pts[0];
+			for (u32 i = 1; i < count; ++i)
+			{
+				lo.x = _min(lo.x, pts[i].x);
+				lo.y = _min(lo.y, pts[i].y);
+				hi.x = _max(hi.x, pts[i].x);
+				hi.y = _max(hi.y, pts[i].y);
+			}
+			if (hi.x - lo.x >= EPS_L || hi.y - lo.y >= EPS_L)
+			{
+				m_hit_clip_poly.assign(pts, pts + count);
+				return;
+			}
+		}
+		m_hit_clip_poly.clear();
+	}
+	IC bool HitClipPass(const Fvector2& abs_pos) const
+	{
+		const u32 n = m_hit_clip_poly.size();
+		if (n < 3)
+			return true;
+		float sign = 0.0f;
+		for (u32 i = 0; i < n; ++i)
+		{
+			const Fvector2& a = m_hit_clip_poly[i];
+			const Fvector2& b = m_hit_clip_poly[(i + 1) % n];
+			const float cr = (b.x - a.x) * (abs_pos.y - a.y) - (b.y - a.y) * (abs_pos.x - a.x);
+			if (cr != 0.0f)
+			{
+				if (sign == 0.0f)
+					sign = cr;
+				else if ((cr < 0.0f) != (sign < 0.0f))
+					return false;
+			}
+		}
+		return true;
+	}
+
 	IC bool GetCustomDraw() const { return m_bCustomDraw; }
 	IC void SetCustomDraw(bool b) { m_bCustomDraw = b; }
 
@@ -325,6 +370,8 @@ protected:
 	// Если курсор над окном
 	bool m_bCursorOverWindow;
 	bool m_bCustomDraw;
+
+	xr_vector<Fvector2> m_hit_clip_poly;
 
 #ifdef DEBUG
 	int m_dbg_id;
