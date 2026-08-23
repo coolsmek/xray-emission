@@ -29,7 +29,28 @@ void R_hemi::set_neg_faces(float negx, float negy, float negz)
 
 void R_hemi::set_material(float x, float y, float z, float w)
 {
-	if (c_material) RCache.set_c(c_material, x, y, z, w);
+	if (c_material) {
+		RCache.set_c(c_material, x, y, z, w);
+	} else {
+#ifdef DEBUG
+		static xr_vector<shared_str> logged_shaders;
+		shared_str current_ps = RCache.ps_name ? RCache.ps_name : "unknown_ps";
+		bool bFound = false;
+		for (u32 i = 0; i < logged_shaders.size(); ++i) {
+			if (logged_shaders[i] == current_ps) { bFound = true; break; }
+		}
+		if (!bFound) {
+			logged_shaders.push_back(current_ps);
+			Msg("![hemi] set_material SKIPPED: c_material==null in shader '%s' (mtl=%.3f)", current_ps.c_str(), y);
+		}
+#else
+		static bool bLogged = false;
+		if (!bLogged) {
+			Msg("![hemi] set_material SKIPPED: c_material==null (mtl=%.3f)", y);
+			bLogged = true;
+		}
+#endif
+	}
 }
 
 //--DSR-- HeatVision_start

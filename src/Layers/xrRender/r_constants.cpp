@@ -42,7 +42,12 @@ void R_constant_table::_copy(const R_constant_table& Other)
 // predicates
 IC bool p_sort_constants(const ref_constant& C1, const ref_constant& C2) noexcept
 {
-	return C1->name < C2->name;
+	// MUST be content-based (lexicographic), not pointer-based. R_constant_table::equal()
+	// compares element-by-element by index, so two tables with the same constants must
+	// sort into the SAME order — pointer order is non-deterministic across shader-compile
+	// order, causing equal() to mis-dedup and hand a skinned pass a ctable missing
+	// sbones_array → get_c() null → zeroed bones. Lexicographic order is stable.
+	return xr_strcmp(C1->name.c_str(), C2->name.c_str()) < 0;
 }
 
 R_constant* R_constant_table::get(LPCSTR S)
@@ -58,14 +63,17 @@ R_constant* R_constant_table::get(shared_str& S)
 {
 	PROF_EVENT("R_constant_table::get shared_str");
 	// demonized: use lower_bound for shared_str search, sorted by pointer
-    static auto sortFunc = [](const ref_constant& C, const shared_str& S) noexcept { return C->name < S; };
-    auto it = std::lower_bound(table.begin(), table.end(), S, sortFunc);
-    if (it != table.end() && (*it)->name.equal(S))
-        return &**it;
+	// NOTE: the table is sorted by shared_str POINTER order (p_sort_constants),
+	// but a freshly-created query shared_str has an unrelated pointer, so a
+	// pointer-based lower_bound can overshoot the real entry and miss it
+	// (e.g. sbones_array → null → zeroed bones). Use a content-consistent search.
+	for (auto& C : table)
+		if (C->name.equal(S))
+			return &*C;
 	return nullptr;
 }
 
-#if !defined(USE_DX10) && !defined(USE_DX11)
+#if !defined(USE_DX10) && !defined(USE_DX11) && !defined(USE_VK)
 BOOL R_constant_table::parse(void* _desc, u32 destination)
 {
 	D3DXSHADER_CONSTANTTABLE* desc = (D3DXSHADER_CONSTANTTABLE*)_desc;
@@ -262,7 +270,7 @@ void R_constant_table::merge(R_constant_table* T)
 		std::sort(table.begin(), table.end(), p_sort_constants);
 	}
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	//	TODO:	DX10:	Implement merge with validity check
 	m_CBTable.reserve(m_CBTable.size() + T->m_CBTable.size());
 	for (u32 i = 0; i < T->m_CBTable.size(); ++i)
@@ -276,7 +284,7 @@ void R_constant_table::clear()
 	for (u32 it = 0; it < table.size(); it++)
 		table[it] = 0; //.g_constant_allocator.destroy(table[it]);
 	table.clear();
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	m_CBTable.clear();
 #endif	//	
 }

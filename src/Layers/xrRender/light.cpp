@@ -137,6 +137,20 @@ void light::set_texture(LPCSTR name)
 }
 #endif
 
+#if RENDER==R_VK
+// VK stub — projected textures / accum_spot shaders not yet implemented.
+void light::set_texture(LPCSTR name) {}
+
+// VK stub — stores attenuation values; identical to the R_R2/R3/R4 body.
+void light::set_attenuation_params(float a0, float a1, float a2, float fo)
+{
+    attenuation0 = a0;
+    attenuation1 = a1;
+    attenuation2 = a2;
+    falloff = fo;
+}
+#endif
+
 void light::set_active(bool a)
 {
 	if (a)
@@ -202,7 +216,7 @@ void light::set_rotation(const Fvector& D, const Fvector& R, const float eps)
 	direction.normalize(D);
 	right.normalize(R);
 
-	if (!fsimilar(1.f, old_D.dotproduct(D), eps)) 
+	if (!fsimilar(1.f, old_D.dotproduct(D), eps))
 		spatial_move();
 }
 
@@ -450,7 +464,7 @@ void light::xform_calc()
 		// make N pixel border
 		X.S.view.build_camera_dir	(position,L_dir,L_up);
 
-		// _min(L->cone + deg2rad(4.5f), PI*0.98f) - Here, it is needed to enlarge the shadow map frustum to include also 
+		// _min(L->cone + deg2rad(4.5f), PI*0.98f) - Here, it is needed to enlarge the shadow map frustum to include also
 		// displaced pixels and the pixels neighbor to the examining one.
         /* Ray Twitty */
 		float tan_shift;
@@ -486,7 +500,7 @@ void light::optimize_smap_size()
 	X.S.transluent = FALSE;
 	// Compute approximate screen area (treating it as an point light) - R*R/dist_sq
 	// Note: we clamp screen space area to ONE, although it is not correct at all
-	// 
+	//
 	//float	dist = Device.vCameraPosition.distance_to(SpatialComponent->spatial.sphere.P) - SpatialComponent->spatial.sphere.R;
 	//if (dist < 0)	dist = 0;
 	//float	ssa = clampr(range * range / (1.f + dist * dist), 0.f, 1.f);
@@ -508,7 +522,7 @@ void light::optimize_smap_size()
 	float	sizefactor			= range/8.f;				// 4m = .5, 8m=1.f, 16m=2.f, 32m=4.f
 
 	// compute how wide the light frustum is - assume 90deg as being optimal
-	float	widefactor			= cone/deg2rad(90.f);	// 
+	float	widefactor			= cone/deg2rad(90.f);	//
 
 	// factors
 	float	factor0				= powf	(ssa, 0.5f);		// ssa is quadratic
@@ -517,7 +531,7 @@ void light::optimize_smap_size()
 	float	factor3				= powf	(sizefactor, 0.25f);		// this shouldn't make much difference
 	float	factor4				= powf	(widefactor, 0.5f);		// make it linear ???
 	float	factor				= ps_r2_ls_squality * factor0 /** factor1*/ * factor2 * factor3 * factor4;
-	
+
 	// final size calc
 	u32 _size					= iFloor( factor * SMAP_adapt_optimal );
 	if (_size<SMAP_adapt_min)	_size	= SMAP_adapt_min;
@@ -627,7 +641,7 @@ void light::export_()
 					if (vis.pending && !vis.visible)
 						RImplementation.LP_pending.v_spot.push_back(this);
 					else
-						RImplementation.LP_normal.v_spot.push_back(this);				
+						RImplementation.LP_normal.v_spot.push_back(this);
 				}
 				break;
 		}

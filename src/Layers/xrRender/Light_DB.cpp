@@ -203,6 +203,15 @@ void CLight_DB::add_light(light* L)
 }
 #endif // (RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4)
 
+#if RENDER==R_VK
+// VK stub — light accumulation passes not yet implemented.
+// Simply mark the frame so the light isn't re-submitted this frame.
+void CLight_DB::add_light(light* L)
+{
+    if (L) L->frame_render = Device.dwFrame;
+}
+#endif
+
 void CLight_DB::Update()
 {
 	// set sun params

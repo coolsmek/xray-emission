@@ -11,23 +11,26 @@
 #include "ai_script_lua_extension.h"
 #include "ai_script_space.h"
 
+// ai_space.h lives in xrGame and is only needed for non-engine, non-VK builds.
+// ENGINE_BUILD is defined by xrEngine VK configs and all render DLL exports.
+// USE_VK is defined by xrRenderVK — its include paths don't reach xrGame.
 #ifdef XRRENDER_R4_EXPORTS
 #define ENGINE_BUILD
-#endif // XRRENDER_R4_EXPORTS
+#endif
 
 #ifdef XRRENDER_R3_EXPORTS
 #define ENGINE_BUILD
-#endif // XRRENDER_R3_EXPORTS
+#endif
 
 #ifdef XRRENDER_R2_EXPORTS
 #define ENGINE_BUILD
-#endif // XRRENDER_R2_EXPORTS
+#endif
 
 #ifdef XRRENDER_R1_EXPORTS
 #define ENGINE_BUILD
-#endif // XRRENDER_R1_EXPORTS
+#endif
 
-#ifndef ENGINE_BUILD
+#if !defined(ENGINE_BUILD) && !defined(USE_VK)
 #include "ai_space.h"
 #endif
 

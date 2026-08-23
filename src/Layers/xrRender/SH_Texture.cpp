@@ -42,6 +42,9 @@ CTexture::CTexture()
 	flags.seqCycles = FALSE;
 	m_material = 1.0f;
 	bind = xr_make_delegate(this, &CTexture::apply_load);
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
+	m_pSRView = nullptr;
+#endif
 }
 
 CTexture::~CTexture()
@@ -63,6 +66,18 @@ void CTexture::surface_set(ID3DBaseTexture* surf)
 	_RELEASE(pSurface);
 
 	pSurface = surf;
+
+#if defined(USE_VK)
+	// Release the old SRV wrapper (Vulkan handles inside are owned by the VkTexture2DWrapper,
+	// NOT by this lightweight view object — only delete the wrapper struct itself).
+	delete m_pSRView;
+	m_pSRView = nullptr;
+
+	if (surf && surf->imageView != VK_NULL_HANDLE)
+	{
+		m_pSRView = new ID3DShaderResourceView{ surf->imageView, surf->sampler, surf->format };
+	}
+#endif
 }
 
 ID3DBaseTexture* CTexture::surface_get()
@@ -103,10 +118,8 @@ void CTexture::apply_load(u32 dwStage)
 
 void CTexture::apply_theora(u32 dwStage)
 {
-	while (flags.bLoading)
-	{
-		SwitchToThread();
-	}
+	while (flags.bLoading) { SwitchToThread(); }
+#if !defined(USE_VK)
 	if (pTheora->Update(m_play_time != 0xFFFFFFFF ? m_play_time : RDEVICE.dwTimeContinual))
 	{
 		R_ASSERT(D3DRTYPE_TEXTURE == pSurface->GetType());
@@ -128,32 +141,34 @@ void CTexture::apply_theora(u32 dwStage)
 		R_CHK(T2D->UnlockRect(0));
 	}
 	CHK_DX(HW.pDevice->SetTexture(dwStage,pSurface));
+#else
+	// VK: theora video texture update NYI; just register the texture slot
+	if (dwStage < (u32)CBackend::mtMaxPixelShaderTextures)
+		RCache.SetTexturePS((int)dwStage, this);
+#endif
 };
 
 void CTexture::apply_avi(u32 dwStage)
 {
-	while (flags.bLoading)
-	{
-		SwitchToThread();
-	}
+	while (flags.bLoading) { SwitchToThread(); }
+#if !defined(USE_VK)
 	if (pAVI->NeedUpdate())
 	{
 		R_ASSERT(D3DRTYPE_TEXTURE == pSurface->GetType());
 		ID3DTexture2D* T2D = (ID3DTexture2D*)pSurface;
-
-		// AVI
 		D3DLOCKED_RECT R;
 		R_CHK(T2D->LockRect(0,&R,NULL,0));
 		R_ASSERT(R.Pitch == int(pAVI->m_dwWidth*4));
-		//		R_ASSERT(pAVI->DecompressFrame((u32*)(R.pBits)));
 		BYTE* ptr;
 		pAVI->GetFrame(&ptr);
 		CopyMemory(R.pBits, ptr, pAVI->m_dwWidth*pAVI->m_dwHeight*4);
-		//		R_ASSERT(pAVI->GetFrame((BYTE*)(&R.pBits)));
-
 		R_CHK(T2D->UnlockRect(0));
 	}
 	CHK_DX(HW.pDevice->SetTexture(dwStage,pSurface));
+#else
+	if (dwStage < (u32)CBackend::mtMaxPixelShaderTextures)
+		RCache.SetTexturePS((int)dwStage, this);
+#endif
 };
 
 void CTexture::apply_seq(u32 dwStage)
@@ -170,29 +185,41 @@ void CTexture::apply_seq(u32 dwStage)
 		u32 frame_id = frame % (frame_data * 2);
 		if (frame_id >= frame_data) frame_id = (frame_data - 1) - (frame_id % frame_data);
 		pSurface = seqDATA[frame_id];
+#if defined(USE_VK)
+		if (frame_id < m_seqSRView.size()) m_pSRView = m_seqSRView[frame_id];
+#endif
 	}
 	else
 	{
 		u32 frame_id = frame % frame_data;
 		pSurface = seqDATA[frame_id];
+#if defined(USE_VK)
+		if (frame_id < m_seqSRView.size()) m_pSRView = m_seqSRView[frame_id];
+#endif
 	}
+#if !defined(USE_VK)
 	CHK_DX(HW.pDevice->SetTexture(dwStage,pSurface));
+#else
+	if (dwStage < (u32)CBackend::mtMaxPixelShaderTextures)
+		RCache.SetTexturePS((int)dwStage, this);
+#endif
 };
 
 void CTexture::apply_gif(u32 dwStage)
 {
-    while (flags.bLoading)
-    {
-	SwitchToThread();
-    }
+    while (flags.bLoading) { SwitchToThread(); }
+#if !defined(USE_VK)
     if (gifPlayer->UpdateFrame())
     {
         const CGIFAnimationPlayer::Frame* const gifFrame = gifPlayer->GetActiveFrame();
         R_ASSERT(gifFrame);
-
         pSurface = gifFrame->surface;
     }
     CHK_DX(HW.pDevice->SetTexture(dwStage, pSurface));
+#else
+    if (dwStage < (u32)CBackend::mtMaxPixelShaderTextures)
+        RCache.SetTexturePS((int)dwStage, this);
+#endif
 }
 
 void CTexture::apply_normal(u32 dwStage)
@@ -201,8 +228,24 @@ void CTexture::apply_normal(u32 dwStage)
 	{
 		SwitchToThread();
 	}
-	dwLastUsedFrame = Device.dwFrame;
+    // should dwLastUsedFrame = Device.dwFrame; be placed inside the #if !defined(USE_VK)?
+#if !defined(USE_VK)
+    dwLastUsedFrame = Device.dwFrame;
 	CHK_DX(HW.pDevice->SetTexture(dwStage,pSurface));
+#else
+    // VK: record this texture into RCache for vk_FlushDescriptors to bind.
+    if (dwStage < CTexture::rstVertex)
+    {
+        if ((int)dwStage < CBackend::mtMaxPixelShaderTextures)
+            RCache.SetTexturePS((int)dwStage, this);
+    }
+    else if (dwStage < CTexture::rstGeometry)
+    {
+        int vsIdx = (int)(dwStage - CTexture::rstVertex);
+        if (vsIdx < CBackend::mtMaxVertexShaderTextures)
+            RCache.SetTextureVS(vsIdx, this);
+    }
+#endif
 };
 
 void CTexture::Preload()
@@ -227,13 +270,24 @@ void CTexture::Load()
 
 	flags.bUser = false;
 	flags.MemoryUsage = 0;
+
+	if (!cName.size() || !*cName)
+	{
+		flags.bLoading = false;
+		flags.bLoaded = true;
+		return;
+	}
+
+#if !defined(USE_VK)
 	if (0==_stricmp(*cName,"$null"))
 	{
 		flags.bLoading = false;
 		flags.bLoaded = true;
 		return;
 	}
-	if (0!=strstr(*cName,"$user$"))	
+#endif
+
+	if (0!=strstr(*cName,"$user$"))
 	{
 		flags.bUser	= true;
 		flags.bLoading = false;
@@ -249,6 +303,8 @@ void CTexture::Load()
 	{
 		// Check for OGM
 		string_path fn;
+        if (strstr(Core.Params, "-vkdebug"))
+            Msg("VK DEBUG CTexture::Load - Checking OGM for: %s", *cName);
 		if (FS.exist(fn, "$game_textures$", *cName, ".ogm"))
 		{
 			// AVI
@@ -284,38 +340,42 @@ void CTexture::Load()
 				}
 			}
 		}
-		else if (FS.exist(fn, "$game_textures$", *cName, ".avi"))
-		{
-			// AVI
-			pAVI = xr_new<CAviPlayerCustom>();
+		else {
+            if (strstr(Core.Params, "-vkdebug"))
+                Msg("VK DEBUG CTexture::Load - Checking AVI for: %s", *cName);
+            if (FS.exist(fn, "$game_textures$", *cName, ".avi"))
+            {
+                // AVI
+                pAVI = xr_new<CAviPlayerCustom>();
 
-			if (!pAVI->Load(fn))
-			{
-				xr_delete(pAVI);
-				FATAL("Can't open video stream");
-			}
-			else
-			{
-				flags.MemoryUsage = pAVI->m_dwWidth * pAVI->m_dwHeight * 4;
+                if (!pAVI->Load(fn))
+                {
+                    xr_delete(pAVI);
+                    FATAL("Can't open video stream");
+                }
+                else
+                {
+                    flags.MemoryUsage = pAVI->m_dwWidth * pAVI->m_dwHeight * 4;
 
-				// Now create texture
-				ID3DTexture2D* pTexture = 0;
-				HRESULT hrr = HW.pDevice->CreateTexture(
-					pAVI->m_dwWidth, pAVI->m_dwHeight, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED,
-					&pTexture,NULL
-				);
-				pSurface = pTexture;
-				if (FAILED(hrr))
-				{
-					FATAL("Invalid video stream");
-					R_CHK(hrr);
-					xr_delete(pAVI);
-					pSurface = 0;
-				}
-			}
-		}
-		else if (FS.exist(fn, "$game_textures$", *cName, ".seq"))
-		{
+                    // Now create texture
+                    ID3DTexture2D* pTexture = 0;
+                    HRESULT hrr = HW.pDevice->CreateTexture(
+                        pAVI->m_dwWidth, pAVI->m_dwHeight, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &pTexture, NULL);
+                    pSurface = pTexture;
+                    if (FAILED(hrr))
+                    {
+                        FATAL("Invalid video stream");
+                        R_CHK(hrr);
+                        xr_delete(pAVI);
+                        pSurface = 0;
+                    }
+                }
+            }
+            else {
+                if (strstr(Core.Params, "-vkdebug"))
+                    Msg("VK DEBUG CTexture::Load - Checking SEQ for: %s", *cName);
+                if (FS.exist(fn, "$game_textures$", *cName, ".seq"))
+                {
 			// Sequence
 			string256 buffer;
 			IReader* _fs = FS.r_open(fn);
@@ -338,12 +398,21 @@ void CTexture::Load()
 				{
 					// Load another texture
 					u32 mem = 0;
-					pSurface = ::RImplementation.texture_load(buffer, mem);
-					if (pSurface)
+					ID3DBaseTexture* frameSurf = ::RImplementation.texture_load(buffer, mem);
+					if (frameSurf)
 					{
-						// pSurface->SetPriority	(PRIORITY_LOW);
-						seqDATA.push_back(pSurface);
+						seqDATA.push_back(frameSurf);
 						flags.MemoryUsage += mem;
+#if defined(USE_VK)
+						// Build a per-frame SRView wrapper (imageView+sampler) directly.
+						// Do NOT call surface_set — we're inside Load() with bLoading == true.
+						ID3DShaderResourceView* srv = nullptr;
+						if (frameSurf->imageView != VK_NULL_HANDLE)
+							srv = new ID3DShaderResourceView{ frameSurf->imageView,
+							                                  frameSurf->sampler,
+							                                  frameSurf->format };
+						m_seqSRView.push_back(srv);
+#endif
 					}
 				}
 			}
@@ -377,10 +446,22 @@ void CTexture::Load()
 			// Calc memory usage and preload into vid-mem
 			if (pSurface)
 			{
-				// pSurface->SetPriority	(PRIORITY_NORMAL);
 				flags.MemoryUsage = mem;
+#if defined(USE_VK)
+				// Build the VK SRView (imageView+sampler) directly here.
+				// NOTE: do NOT call surface_set() — we are inside Load() with
+				// flags.bLoading == true, and surface_set spins on that flag → deadlock.
+				delete m_pSRView;
+				m_pSRView = nullptr;
+				if (pSurface->imageView != VK_NULL_HANDLE)
+					m_pSRView = new ID3DShaderResourceView{ pSurface->imageView,
+					                                        pSurface->sampler,
+					                                        pSurface->format };
+#endif
 			}
 		}
+        } // close seq check else
+        } // close avi check else
 		//#endif
 	}
 	PostLoad();
@@ -414,6 +495,12 @@ void CTexture::Unload()
 			_RELEASE(seqDATA[I]);
 		}
 		seqDATA.clear();
+#if defined(USE_VK)
+		for (u32 I = 0; I < m_seqSRView.size(); I++)
+			delete m_seqSRView[I];   // wrapper struct only; Vk handles owned by seqDATA wrappers
+		m_seqSRView.clear();
+		m_pSRView = nullptr;         // was pointing into m_seqSRView
+#endif
 		pSurface = 0;
 	}
 	flags.MemoryUsage = 0;
@@ -438,16 +525,24 @@ void CTexture::Unload()
 
 void CTexture::desc_update()
 {
-	while (flags.bLoading)
-	{
-		SwitchToThread();
-	}
+	while (flags.bLoading) { SwitchToThread(); }
 	desc_cache = pSurface;
+#if !defined(USE_VK)
 	if (pSurface && (D3DRTYPE_TEXTURE == pSurface->GetType()))
 	{
 		ID3DTexture2D* T = (ID3DTexture2D*)pSurface;
 		R_CHK(T->GetLevelDesc(0,&desc));
 	}
+#else
+	// VK: populate desc from the VkTexture2DWrapper fields directly
+	if (pSurface)
+	{
+		desc.Width    = pSurface->width;
+		desc.Height   = pSurface->height;
+		desc.Format   = pSurface->format;
+		desc.MipLevels = pSurface->mips;
+	}
+#endif
 }
 
 void CTexture::video_Play(BOOL looped, u32 _time)

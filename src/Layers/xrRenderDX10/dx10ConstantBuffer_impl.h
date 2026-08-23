@@ -4,7 +4,16 @@
 
 IC Fvector4* dx10ConstantBuffer::Access(u16 offset)
 {
-	//	TODO: DX10: Implement code which will check if set actually changes code.
+    // VK: if the backing buffer was never allocated (wrong constructor path), bail out.
+#if defined(USE_VK)
+    if (!m_pBufferData || m_uiBufferSize == 0)
+    {
+        // Return a static dummy so callers don't crash; data is discarded.
+        static Fvector4 s_dummy{0,0,0,0};
+        return &s_dummy;
+    }
+#endif
+    //	TODO: DX10: Implement code which will check if set actually changes code.
 	m_bChanged = true;
 
 	//	Check buffer size in client code: don't know if actual data will cross

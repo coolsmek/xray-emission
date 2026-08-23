@@ -645,9 +645,16 @@ void Startup()
 	// Initialize APP
 	Device.Create();
 
+	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG x_ray.cpp: Device.Create() finished. entering LALib.OnCreate()"); xrLogger::FlushLog(); }
 	LALib.OnCreate();
+	
+	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG x_ray.cpp: entering pApp = xr_new<CApplication>()"); xrLogger::FlushLog(); }
 	pApp = xr_new<CApplication>();
+	
+	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG x_ray.cpp: entering NEW_INSTANCE(CLSID_GAME_PERSISTANT)"); xrLogger::FlushLog(); }
 	g_pGamePersistent = (IGame_Persistent*)NEW_INSTANCE(CLSID_GAME_PERSISTANT);
+	
+	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG x_ray.cpp: allocating ISpatial_DBs"); xrLogger::FlushLog(); }
 	g_SpatialSpace = xr_new<ISpatial_DB>();
 	g_SpatialSpacePhysic = xr_new<ISpatial_DB>();
 	g_SpatialSpaceLights = xr_new<ISpatial_DB>();
@@ -1533,7 +1540,8 @@ void CApplication::LoadBegin()
 #ifndef DEDICATED_SERVER
 		_InitializeFont(pFontSystem, "ui_font_letterica18_russian", 0);
 
-		m_pRender->LoadBegin();
+		if (m_pRender)
+			m_pRender->LoadBegin();
 #endif
 		phase_timer.Start();
 		load_stage = 0;
@@ -1555,7 +1563,8 @@ void CApplication::LoadEnd()
 
 void CApplication::destroy_loading_shaders()
 {
-	m_pRender->destroy_loading_shaders();
+	if (m_pRender)
+		m_pRender->destroy_loading_shaders();
 
 	//AVO:
 	g_bootComplete = TRUE;
@@ -1721,7 +1730,7 @@ void CApplication::Level_Set(u32 L)
 		}
 	}
 
-	if (path[0])
+	if (path[0] && m_pRender)
 		m_pRender->setLevelLogo(path);
 
 	//SECUROM_MARKER_PERFORMANCE_OFF(9)
@@ -1917,7 +1926,8 @@ void doBenchmark(LPCSTR name)
 #pragma optimize("g", off)
 void CApplication::load_draw_internal()
 {
-	m_pRender->load_draw_internal(*this);
+	if (m_pRender)
+		m_pRender->load_draw_internal(*this);
 	/*
 	if(!sh_progress){
 	CHK_DX (HW.pDevice->Clear(0,0,D3DCLEAR_TARGET,D3DCOLOR_ARGB(0,0,0,0),1,0));

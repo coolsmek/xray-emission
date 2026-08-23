@@ -10,7 +10,7 @@ IC HRESULT CreateQuery ( ID3DQuery **ppQuery, D3DQUERYTYPE Type)
 {
 	D3D_QUERY_DESC	desc;
 	desc.MiscFlags = 0;
-	
+
 	switch (Type)
 	{
 	case D3DQUERYTYPE_OCCLUSION:
@@ -74,7 +74,28 @@ IC HRESULT BeginQuery(ID3DQuery* pQuery)
 
 IC HRESULT EndQuery(ID3DQuery* pQuery)
 {
-	pQuery->End();
+    pQuery->End();
+    return S_OK;
+}
+#elif defined(USE_VK)
+
+IC HRESULT CreateQuery(ID3DQuery** ppQuery, D3DQUERYTYPE Type)
+{
+	return S_OK;
+}
+
+IC HRESULT GetData(ID3DQuery* pQuery, void* pData, UINT DataSize, UINT Flags = 0)
+{
+	return S_OK;
+}
+
+IC HRESULT BeginQuery(ID3DQuery* pQuery)
+{
+	return S_OK;
+}
+
+IC HRESULT EndQuery(ID3DQuery* pQuery)
+{
 	return S_OK;
 }
 

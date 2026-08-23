@@ -3,7 +3,7 @@
 #define		rt_dimensions 1024
 #include	"../xrRender/FBasicVisual.h"
 
-#if !defined(USE_DX10) && !defined(USE_DX11)
+#if !defined(USE_DX10) && !defined(USE_DX11) && !defined(USE_VK)
 void r_pixel_calculator::begin()
 {
 	rt.create("$user$test", rt_dimensions,rt_dimensions, HW.Caps.fTarget);

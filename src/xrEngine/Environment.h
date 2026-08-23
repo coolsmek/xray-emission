@@ -252,6 +252,7 @@ public:
 class ENGINE_API CEnvironment
 {
 	friend class dxEnvironmentRender;
+	friend class vkEnvironmentRender;
 
 	struct str_pred
 	{

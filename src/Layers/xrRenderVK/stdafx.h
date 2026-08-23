@@ -1,4 +1,4 @@
-﻿/*
+/*
 The ID3DState::Apply() Trick:
 By explicitly defining struct ID3DState { void Apply() {} }; inside the USE_VK block right here, you satisfy
 the compiler for line 150 of R_Backend_Runtime.h. When it reads TargetState->Apply(), it evaluates it as a
@@ -17,14 +17,11 @@ the vulkan.h headers, engine rendering context types, and core variables automat
 
 #pragma once
 
-#pragma warning(disable:4995)
-#include "../../xrEngine/stdafx.h"
-#pragma warning(disable:4995)
-#pragma warning(default:4995)
-
 // 1. Establish Master Vulkan Guards & Platform Hooks
+//    MUST be defined before xrEngine/stdafx.h so that every engine header
+//    that includes RenderFactory.h / FactoryPtr.h / xrAPI.h sees USE_VK.
 #ifndef USE_VK
-#define USE_VK  // The master preprocessor flag for the entire compilation unit
+#define USE_VK
 #endif
 
 #define R_R1 1
@@ -36,27 +33,15 @@ the vulkan.h headers, engine rendering context types, and core variables automat
 #define RENDER R_VK
 #endif
 
+#pragma warning(disable:4995)
+#include "../../xrEngine/stdafx.h"
+#pragma warning(disable:4995)
+#pragma warning(default:4995)
+
 // Vulkan — use the KHR_surface + Win32_surface WSI
 #define VK_USE_PLATFORM_WIN32_KHR
 #include <vulkan/vulkan.h>
 
-// 2. STUB INJECTION LAYER (Bypasses DirectX structural dependencies safely)
-// We define these types BEFORE xrRender headers are read so they don't break.
-#ifdef USE_VK
-    // Provide a light implementation for ID3DState so R_Backend_Runtime.h line 150 compiles safely
-    struct ID3DState {
-        void Apply() { /* Safe Opaque Vulkan No-Op */ }
-    };
-
-    // Forward-declare minimal opaque types for fields inside HW.h / R_Backend.h
-    // This allows pointers to remain intact without needing the DirectX SDK headers.
-    typedef struct ID3D11Device             ID3DDevice;
-    typedef struct ID3D11DeviceContext      ID3DDeviceContext;
-    typedef struct IDXGISwapChain           IDXGISwapChain;
-    typedef struct ID3D11RenderTargetView   ID3DRenderTargetView;
-    typedef struct ID3D11DepthStencilView   ID3DDepthStencilView;
-    typedef struct ID3D11BaseShader         ID3DBaseShader;
-#endif
 
 // 3. Engine Base Layout Definitions
 #include "../xrRender/xrD3DDefs.h"
@@ -80,8 +65,23 @@ the vulkan.h headers, engine rendering context types, and core variables automat
 
 // 6. Native Vulkan Utilities Interface
 // Include any foundational Vulkan helpers that all your future .cpp files will need.
-// #include "vk_HW.h" // Your device initializer declaration
+#include "vk_DebugMarkers.h"
 
-// #include "vk_render.h" // TODO: add when CRender is implemented
+// 7. Render-specific types and pipelines
+#include "r2_types.h"
+#include "rVK.h"
 
+IC void jitter(CBlender_Compile& C)
+{
+	C.r_dx10Texture("jitter0", JITTER(0));
+	C.r_dx10Texture("jitter1", JITTER(1));
+	C.r_dx10Texture("jitter2", JITTER(2));
+	C.r_dx10Texture("jitter3", JITTER(3));
+	C.r_dx10Texture("jitter4", JITTER(4));
+	C.r_dx10Texture("jitterMipped", r2_jitter_mipped);
+	C.r_dx10Sampler("smp_jitter");
+}
 
+// ── Vulkan Debugging Macros ──────────────────────────────────────────────────
+extern bool g_bVulkanDebugLog;
+#define VK_DBG(fmt, ...) do { if (g_bVulkanDebugLog) Msg("* VK: " fmt, __VA_ARGS__); } while(0)

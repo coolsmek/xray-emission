@@ -43,10 +43,10 @@ public:
 
 	virtual void Compile(CBlender_Compile& C);
 
-	virtual void SetDefine(LPCSTR Name, LPCSTR Definition)
+	virtual void SetDefine(LPCSTR _Name, LPCSTR _Definition)
 	{
-		this->Name = Name;
-		this->Definition = Definition;
+		this->Name = _Name;
+		this->Definition = _Definition;
 	}
 
 	CBlender_accum_volumetric_msaa();

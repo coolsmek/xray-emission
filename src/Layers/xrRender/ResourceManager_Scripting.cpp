@@ -159,7 +159,7 @@ public:
 	}
 };
 
-// wrapper																																					
+// wrapper
 class adopt_compiler
 {
 	CBlender_Compile* C;
@@ -309,7 +309,7 @@ static void *lua_alloc		(void *ud, void *ptr, size_t osize, size_t nsize) {
 	}
 
 	if ( !ptr ) {
-		void* const result			= 
+		void* const result			=
 			g_render_lua_allocator.malloc_impl((u32)nsize);
 		memory_monitor::monitor_alloc (result,nsize,"render:LUA");
 		return						result;
@@ -326,8 +326,17 @@ static void *lua_alloc		(void *ud, void *ptr, size_t osize, size_t nsize) {
 // export
 extern int luaopen_lua_extensions(lua_State* L, bool IsDebug = false);
 
+// Fallback luabind allocator used in tool-mode (XrayModelViewer) where
+// xrServerEntities / CScriptEngine never calls setup_luabind_allocator().
+static void* s_luabind_alloc(luabind::memory_allocation_function_parameter, void const* ptr, size_t sz)
+{
+	if (!ptr) return Memory.mem_alloc(sz);
+	return Memory.mem_realloc(const_cast<void*>(ptr), sz);
+}
+
 void CResourceManager::LS_Load()
 {
+	Msg("* Loading shader scripts (LUA)");
 #ifdef USE_GSC_MEM_ALLOC
 	LSVM = lua_newstate(lua_alloc, NULL);
 #else
@@ -340,15 +349,22 @@ void CResourceManager::LS_Load()
 		return;
 	}
 
-	// initialize lua standard library functions 
+	// initialize lua standard library functions
 	luaopen_base(LSVM);
 	luaopen_table(LSVM);
 	luaopen_string(LSVM);
 	luaopen_math(LSVM);
 	luaopen_jit(LSVM);
-
 	luaopen_lua_extensions(LSVM);
 
+	// luabind::allocator must be set before luabind::open; in the normal game the
+	// script engine (xrServerEntities) does this via setup_luabind_allocator().
+	// In tool-mode (XrayModelViewer) that module is never loaded, so we set it here.
+	if (!::luabind::allocator)
+	{
+		::luabind::allocator           = &s_luabind_alloc;
+		::luabind::allocator_parameter = nullptr;
+	}
 	::luabind::open(LSVM);
 #if !XRAY_EXCEPTIONS
 	if (0 == ::luabind::get_error_callback())
@@ -356,7 +372,6 @@ void CResourceManager::LS_Load()
 #endif
 
 	function(LSVM, "log", LuaLog2);
-
 	module(LSVM)
 	[
 		class_<adopt_sampler>("_sampler")
@@ -416,7 +431,11 @@ void CResourceManager::LS_Load()
 	// load shaders
 	xr_vector<char*>* folder = FS.file_list_open("$game_shaders$", ::Render->getShaderPath(),
 	                                             FS_ListFiles | FS_RootOnly);
-	VERIFY(folder);
+	if (!folder)
+	{
+		Msg("! [LS] $game_shaders$/%s returned null — no shader scripts loaded", ::Render->getShaderPath());
+		return;
+	}
 	for (u32 it = 0; it < folder->size(); it++)
 	{
 		string_path namesp, fn;
@@ -436,6 +455,7 @@ void CResourceManager::LS_Load()
 		}
 	}
 	FS.file_list_close(folder);
+	Msg("* Shader scripts loaded");
 }
 
 void CResourceManager::LS_Unload()

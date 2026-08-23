@@ -84,9 +84,9 @@ public:
 
 	virtual float get_luminocity()
 	{
-		float result = _max(approximate.x, _max(approximate.y, approximate.z));
-		clamp(result, 0.f, 1.f);
-		return (result);
+		float _result = _max(approximate.x, _max(approximate.y, approximate.z));
+		clamp(_result, 0.f, 1.f);
+		return (_result);
 	};
 	virtual float get_luminocity_hemi() { return get_hemi(); }
 	virtual float* get_luminocity_hemi_cube() { return hemi_cube_smooth; }

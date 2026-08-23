@@ -202,7 +202,7 @@ void xrLogger::SimpleMessage(LPCSTR Message, u32 MessageSize /*= 0*/)
 		logData->emplace(LogRecord(msgToLog.c_str(), (u32)msgToLog.size()));
 		UnpauseLogging();
 	}
-	
+
 }
 
 void xrLogger::OpenLogFile()
@@ -238,7 +238,7 @@ void xrLogger::InitLog()
 		theLogger = new xrLogger;
 		xrLogger::logData = new xr_queue <xrLogger::LogRecord>;
 		thread_spawn(LogThreadEntryStartup, "X-Ray Log Thread", 0, nullptr);
-	}	
+	}
 }
 
 void xrLogger::InternalFlushLog()
@@ -263,12 +263,30 @@ void xrLogger::SetImmediateMode(bool enable)
 	if (theLogger == nullptr)
 		return;
 
-	theLogger->bImmediateMode = enable;		
+	theLogger->bImmediateMode = enable;
 }
 
 void xrLogger::CloseLog()
 {
 	theLogger->InternalCloseLog();
+}
+
+// For Xray Model Viewer App
+void xrLogger::DetachLogFile()
+{
+	if (theLogger == nullptr)
+		return;
+
+	// Drain any pending queued messages so they reach the file before we close it.
+	theLogger->InternalPrintAllRecords();
+	theLogger->InternalFlushLog();
+
+	// Null out the file pointer and close the VFS handle — but leave bIsAlive=true
+	// so the log thread keeps running and callbacks keep firing.
+	IWriter* tempCopy = (IWriter*)theLogger->logFile;
+	theLogger->logFile = nullptr;
+	if (tempCopy != nullptr)
+		FS.w_close(tempCopy);
 }
 
 void xrLogger::AddLogCallback(LogCallback logCb)
@@ -304,7 +322,7 @@ void xrLogger::InternalCloseLog()
 }
 
 xrLogger::xrLogger()
-	: logFile(nullptr), bFastDebugLog(false), 
+	: logFile(nullptr), bFastDebugLog(false),
 	bIsAlive(true),
 	bFlushRequested(false),
 	bImmediateMode(false)
@@ -437,7 +455,7 @@ void xrLogger::LogThreadEntry()
 			CloseHandle(hLogThread);
 			return;
 		}
-		
+
 		WaitForSingleObject(hLogThread, INFINITE);
 		{
 			PROF_EVENT("Log Frame");

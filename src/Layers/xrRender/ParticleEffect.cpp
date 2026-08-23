@@ -651,6 +651,9 @@ bool ParticleRenderStream(FVF::LIT* pv, u32 count, PAPI::Particle * particles, C
 
 void CParticleEffect::Render(float)
 {
+	if (!strstr(Core.Params, "-enable_particles"))
+		return;
+
 #ifdef _GPA_ENABLED
 		TAL_SCOPED_TASK_NAMED( "CParticleEffect::Render()" );
 #endif // _GPA_ENABLED

@@ -47,7 +47,7 @@ struct ECORE_API SPS : public xr_resource_named
 
 typedef resptr_core<SPS, resptr_base<SPS>> ref_ps;
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 //////////////////////////////////////////////////////////////////////////
 struct ECORE_API SGS : public xr_resource_named
 {
@@ -56,9 +56,9 @@ struct ECORE_API SGS : public xr_resource_named
 	~SGS			();
 };
 typedef	resptr_core<SGS,resptr_base<SGS> > ref_gs;
-#endif	//	USE_DX10
+#endif	//	USE_DX10 || USE_VK
 
-#ifdef USE_DX11
+#if defined(USE_DX11) || defined(USE_VK)
 
 struct ECORE_API SHS : public xr_resource_named
 {
@@ -99,7 +99,7 @@ typedef resptr_core<SState, resptr_base<SState>> ref_state;
 //////////////////////////////////////////////////////////////////////////
 struct ECORE_API SDeclaration : public xr_resource_flagged
 {
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	//	Maps input signature to input layout
 	xr_map<ID3DBlob*, ID3DInputLayout*>		vs_to_layout;
 	xr_vector<D3D_INPUT_ELEMENT_DESC>		dx10_dcl_code;

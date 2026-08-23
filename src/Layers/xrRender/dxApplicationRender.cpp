@@ -65,11 +65,25 @@ void dxApplicationRender::load_draw_internal(CApplication& owner)
 	RImplementation.rmNormal();
 	RCache.set_RT(HW.pBaseRT);
 	RCache.set_ZB(HW.pBaseZB);
+#elif defined(USE_VK)
+	// The load screen bypasses CRender::render_menu(), so we must replicate the same
+	// swapchain-target + UI render-state setup that render_menu() performs.
+	// Without this, RT/ZB may still point at a stale intermediate target from the
+	// last 3D render pass, culling may be enabled, and the fullscreen load-screen
+	// quads never reach the backbuffer — producing a completely blank loading screen.
+	RImplementation.rmNormal();
+	RCache.set_RT(nullptr, 0);		// force swapchain backbuffer as target (no intermediate RT)
+	RCache.set_ZB(nullptr);			// no depth buffer for 2D load screen quads
+	RCache.set_CullMode(CULL_NONE);	// fullscreen quads must not be culled
+	RCache.set_Stencil(FALSE);
+	RCache.set_ColorWriteEnable();
 #endif	//	USE_DX10
 
 #if defined(USE_DX10) || defined(USE_DX11)
 	FLOAT ColorRGBA[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 	HW.pContext->ClearRenderTargetView(RCache.get_RT(), ColorRGBA);
+#elif defined(USE_VK)
+	// Handled by Vulkan render pass load ops (VK_ATTACHMENT_LOAD_OP_CLEAR).
 #else	//	USE_DX10
 	CHK_DX(HW.pDevice->Clear(0,0,D3DCLEAR_TARGET,D3DCOLOR_ARGB(0,0,0,0),1,0));
 #endif	//	USE_DX10

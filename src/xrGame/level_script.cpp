@@ -1605,10 +1605,14 @@ void hud_adj_state(bool state)
 
 LPCSTR vid_modes_string()
 {
-	xr_string resolutions = "";
+	// Fixed a dangling pointer bug that caused a silent Lua crash in Vulkan.
+	// We made 'resolutions' static so that the returned C-string remains valid after the function returns.
+	// We also added a null check for `tok` in case vid_mode_token is uninitialized.
+	static xr_string resolutions;
+	resolutions = "";
 
 	xr_token* tok = vid_mode_token;
-	while (tok->name)
+	while (tok && tok->name)
 	{
 		if (strlen(resolutions.c_str()) > 0)
 			resolutions.append(",");

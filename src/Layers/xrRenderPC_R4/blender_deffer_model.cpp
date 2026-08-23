@@ -118,7 +118,7 @@ void CBlender_deffer_model::Compile(CBlender_Compile& C)
 
 			if (C.HudElement)
 			{
-				uber_deffer(C, true, "model_hud", "base_hud", bAref, 0, true);
+				uber_deffer(C, true, "model", "base", bAref, 0, true);
 				C.r_dx10Texture("s_hud_rain", "fx\\hud_rain");
 			}
 			else

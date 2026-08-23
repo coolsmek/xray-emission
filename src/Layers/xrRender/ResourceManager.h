@@ -40,10 +40,10 @@ public:
 	DEFINE_MAP_PRED(const char*, CRT*, map_RT, map_RTIt, str_pred);
 	//	DX10 cut DEFINE_MAP_PRED(const char*,CRTC*,			map_RTC,		map_RTCIt,			str_pred);
 	DEFINE_MAP_PRED(const char*, SVS*, map_VS, map_VSIt, str_pred);
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	DEFINE_MAP_PRED(const char*,SGS*,			map_GS,			map_GSIt,			str_pred);
 #endif	//	USE_DX10
-#ifdef USE_DX11
+#if defined(USE_DX11) || defined(USE_VK)
 	DEFINE_MAP_PRED(const char*, SHS*,			map_HS,			map_HSIt,			str_pred);
 	DEFINE_MAP_PRED(const char*, SDS*,			map_DS,			map_DSIt,			str_pred);
 	DEFINE_MAP_PRED(const char*, SCS*,			map_CS,			map_CSIt,			str_pred);
@@ -61,7 +61,7 @@ private:
 	//	DX10 cut map_RTC												m_rtargets_c;
 	map_VS m_vs;
 	map_PS m_ps;
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	map_GS												m_gs;
 #endif	//	USE_DX10
 	map_TD m_td;
@@ -140,7 +140,7 @@ public:
 	void							_DeleteInputSignature(const SInputSignature* pSignature);
 #endif	//	USE_DX10
 
-#ifdef USE_DX11
+#if defined(USE_DX11) || defined(USE_VK)
 	CRT*							_CreateRT			(LPCSTR Name, u32 w, u32 h,	D3DFORMAT f, u32 SampleCount = 1, bool useUAV=false );
 #else
 	CRT* _CreateRT(LPCSTR Name, u32 w, u32 h, D3DFORMAT f, u32 SampleCount = 1);
@@ -149,12 +149,12 @@ public:
 
 	//	DX10 cut CRTC*							_CreateRTC			(LPCSTR Name, u32 size,	D3DFORMAT f);
 	//	DX10 cut void							_DeleteRTC			(const CRTC*	RT	);
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	SGS*							_CreateGS			(LPCSTR Name);
 	void							_DeleteGS			(const SGS*	GS	);
 #endif	//	USE_DX10
 
-#ifdef USE_DX11
+#if defined(USE_DX11) || defined(USE_VK)
 	SHS*							_CreateHS			(LPCSTR Name);
 	void							_DeleteHS			(const SHS*	HS	);
 

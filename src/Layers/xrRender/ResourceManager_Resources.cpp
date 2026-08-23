@@ -335,6 +335,124 @@ void CResourceManager::_DeletePS(const SPS* ps)
 	Msg("! ERROR: Failed to find compiled pixel-shader '%s'", *ps->cName);
 }
 
+#if defined(USE_VK)
+SGS* CResourceManager::_CreateGS(LPCSTR name)
+{
+	xrCriticalSectionGuard guard(creationGuard);
+	LPSTR N = LPSTR(name);
+	map_GS::iterator I = m_gs.find(N);
+	if (I != m_gs.end()) return I->second;
+	else
+	{
+		SGS* _gs = xr_new<SGS>();
+		_gs->dwFlags |= xr_resource_flagged::RF_REGISTERED;
+		m_gs.insert(mk_pair(_gs->set_name(name), _gs));
+		_gs->gs = NULL;
+		return _gs;
+	}
+}
+
+void CResourceManager::_DeleteGS(const SGS* gs)
+{
+	if (0 == (gs->dwFlags & xr_resource_flagged::RF_REGISTERED)) return;
+	xrCriticalSectionGuard guard(creationGuard);
+	LPSTR N = LPSTR(*gs->cName);
+	map_GS::iterator I = m_gs.find(N);
+	if (I != m_gs.end())
+	{
+		m_gs.erase(I);
+		return;
+	}
+}
+
+SHS* CResourceManager::_CreateHS(LPCSTR name)
+{
+	xrCriticalSectionGuard guard(creationGuard);
+	LPSTR N = LPSTR(name);
+	map_HS::iterator I = m_hs.find(N);
+	if (I != m_hs.end()) return I->second;
+	else
+	{
+		SHS* _hs = xr_new<SHS>();
+		_hs->dwFlags |= xr_resource_flagged::RF_REGISTERED;
+		m_hs.insert(mk_pair(_hs->set_name(name), _hs));
+		_hs->sh = NULL;
+		return _hs;
+	}
+}
+
+void CResourceManager::_DeleteHS(const SHS* hs)
+{
+	if (0 == (hs->dwFlags & xr_resource_flagged::RF_REGISTERED)) return;
+	xrCriticalSectionGuard guard(creationGuard);
+	LPSTR N = LPSTR(*hs->cName);
+	map_HS::iterator I = m_hs.find(N);
+	if (I != m_hs.end())
+	{
+		m_hs.erase(I);
+		return;
+	}
+}
+
+SDS* CResourceManager::_CreateDS(LPCSTR name)
+{
+	xrCriticalSectionGuard guard(creationGuard);
+	LPSTR N = LPSTR(name);
+	map_DS::iterator I = m_ds.find(N);
+	if (I != m_ds.end()) return I->second;
+	else
+	{
+		SDS* _ds = xr_new<SDS>();
+		_ds->dwFlags |= xr_resource_flagged::RF_REGISTERED;
+		m_ds.insert(mk_pair(_ds->set_name(name), _ds));
+		_ds->sh = NULL;
+		return _ds;
+	}
+}
+
+void CResourceManager::_DeleteDS(const SDS* ds)
+{
+	if (0 == (ds->dwFlags & xr_resource_flagged::RF_REGISTERED)) return;
+	xrCriticalSectionGuard guard(creationGuard);
+	LPSTR N = LPSTR(*ds->cName);
+	map_DS::iterator I = m_ds.find(N);
+	if (I != m_ds.end())
+	{
+		m_ds.erase(I);
+		return;
+	}
+}
+
+SCS* CResourceManager::_CreateCS(LPCSTR name)
+{
+	xrCriticalSectionGuard guard(creationGuard);
+	LPSTR N = LPSTR(name);
+	map_CS::iterator I = m_cs.find(N);
+	if (I != m_cs.end()) return I->second;
+	else
+	{
+		SCS* _cs = xr_new<SCS>();
+		_cs->dwFlags |= xr_resource_flagged::RF_REGISTERED;
+		m_cs.insert(mk_pair(_cs->set_name(name), _cs));
+		_cs->sh = NULL;
+		return _cs;
+	}
+}
+
+void CResourceManager::_DeleteCS(const SCS* cs)
+{
+	if (0 == (cs->dwFlags & xr_resource_flagged::RF_REGISTERED)) return;
+	xrCriticalSectionGuard guard(creationGuard);
+	LPSTR N = LPSTR(*cs->cName);
+	map_CS::iterator I = m_cs.find(N);
+	if (I != m_cs.end())
+	{
+		m_cs.erase(I);
+		return;
+	}
+}
+#endif
+
 R_constant_table* CResourceManager::_CreateConstantTable(R_constant_table& C)
 {
 	if (C.empty()) return NULL;

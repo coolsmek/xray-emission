@@ -97,6 +97,57 @@ public:
 #endif
 
 #ifndef NO_XR_VDECLARATOR
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
+struct VDeclarator : public svector<D3DVERTEXELEMENT9, MAXD3DDECLLENGTH + 1>
+{
+	void set(u32 FVF)
+	{
+		// D3DXDeclaratorFromFVF not available in DX10/11/VK; handled by specific conversion layers elsewhere if needed
+		resize(1); // minimal valid state
+	}
+
+	void set(D3DVERTEXELEMENT9* dcl)
+	{
+		// D3DXGetDeclLength not available; count until D3DDECL_END()
+		u32 declLength = 0;
+		while (dcl[declLength].Stream != 0xFF) { declLength++; }
+		resize(declLength + 1);
+		CopyMemory(begin(), dcl, size() * sizeof(D3DVERTEXELEMENT9));
+	}
+
+	void set(const VDeclarator& d)
+	{
+		*this = d;
+	}
+
+	u32 vertex()
+	{
+		// Compute stride as max(Offset + elementSize) across all stream-0 elements.
+		// Mirrors D3DXGetDeclVertexSize semantics used by the DX9 build path.
+		static const u32 kTypeSize[] = {
+			4,8,12,16,  // FLOAT1..FLOAT4
+			4,4,4,8,    // D3DCOLOR, UBYTE4, SHORT2, SHORT4
+			4,4,8,4,8,  // UBYTE4N, SHORT2N, SHORT4N, USHORT2N, USHORT4N
+			4,4,4,8     // UDEC3, DEC3N, FLOAT16_2, FLOAT16_4
+		};
+		u32 stride = 0;
+		for (u32 i = 0; i < size() && begin()[i].Stream != 0xFF; ++i) {
+			if (begin()[i].Stream != 0) continue;
+			u8 t = begin()[i].Type;
+			u32 eSize = (t < sizeof(kTypeSize)/sizeof(kTypeSize[0])) ? kTypeSize[t] : 0;
+			u32 end = begin()[i].Offset + eSize;
+			if (end > stride) stride = end;
+		}
+		return stride;
+	}
+
+	BOOL equal(VDeclarator& d)
+	{
+		if (size() != d.size()) return false;
+		else return 0 == memcmp(begin(), d.begin(), size() * sizeof(D3DVERTEXELEMENT9));
+	}
+};
+#else
 struct VDeclarator : public svector<D3DVERTEXELEMENT9, MAXD3DDECLLENGTH + 1>
 {
 	void set(u32 FVF)
@@ -124,6 +175,7 @@ struct VDeclarator : public svector<D3DVERTEXELEMENT9, MAXD3DDECLLENGTH + 1>
 		else return 0 == memcmp(begin(), d.begin(), size() * sizeof(D3DVERTEXELEMENT9));
 	}
 };
+#endif
 #endif
 
 #endif

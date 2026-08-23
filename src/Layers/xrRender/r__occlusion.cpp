@@ -33,6 +33,7 @@ void R_occlusion::occq_create(u32 limit)
 
 void R_occlusion::occq_destroy()
 {
+#ifndef USE_VK
 	while (!used.empty())
 	{
 		_RELEASE(used.back().Q);
@@ -43,6 +44,7 @@ void R_occlusion::occq_destroy()
 		_RELEASE(pool.back().Q);
 		pool.pop_back();
 	}
+#endif // !USE_VK
 	used.clear();
 	pool.clear();
 	fids.clear();
@@ -51,14 +53,16 @@ void R_occlusion::occq_destroy()
 void R_occlusion::occq_refresh()
 {
 	if (!enabled) return;
-	
+
 	PROF_EVENT("R_occlusion::occq_refresh");
 	if (!used.empty())
 	{
+#ifndef USE_VK
 		while	(!used.empty())	{
 			_RELEASE(used.back().Q);
 			used.pop_back	();
 		}
+#endif // !USE_VK
 		used.clear	();
 	}
 	if (!fids.empty())

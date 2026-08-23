@@ -285,6 +285,11 @@ void CHUDManager::RenderUI()
 
 	if (!b_online) return;
 
+	// VK: route in-game UI (HUD, inventory, fonts) to the swapchain in append mode.
+	// Clearing RT slots makes vk_EnsureRenderPassActive target the acquired swapchain
+	// image with LOAD_OP_LOAD (see m_lastSwapchainClearFrame), matching render_menu.
+	// Without this the UI draws have no valid target and never appear.
+	::Render->FlushAndCloseUIPass();
 	if (true /*|| psHUD_Flags.is(HUD_DRAW | HUD_DRAW_RT)*/)
 	{
 		HitMarker.Render();
@@ -312,6 +317,8 @@ void CHUDManager::RenderUI()
 		pFont->Out(_pos.x, _pos.y, _str);
 		pFont->OnRender();
 	}
+
+	::Render->FlushAndCloseUIPass();
 }
 
 void CHUDManager::OnEvent(EVENT E, u64 P1, u64 P2)

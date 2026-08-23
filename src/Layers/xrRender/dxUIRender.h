@@ -57,6 +57,8 @@ private:
 	FVF::LIT* LIT_pv;
 };
 
+#if !defined(USE_VK)
 extern dxUIRender UIRenderImpl;
+#endif // !USE_VK
 
 #endif	//	dxUIRender_included

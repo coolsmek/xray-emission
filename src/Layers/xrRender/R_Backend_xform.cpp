@@ -8,9 +8,30 @@ void R_xforms::set_W(const Fmatrix& m)
 	m_w.set(m);
 	m_wv.mul_43(m_v, m_w);
 	m_wvp.mul(m_p, m_wv);
+
+#if defined(USE_VK)
+	if (!c_w)   c_w   = RCache.get_c("m_W");
+	if (!c_wv)  c_wv  = RCache.get_c("m_WV");
+	if (!c_wvp) c_wvp = RCache.get_c("m_WVP");
+#endif
+
 	if (c_w) RCache.set_c(c_w, m_w);
 	if (c_wv) RCache.set_c(c_wv, m_wv);
-	if (c_wvp) RCache.set_c(c_wvp, m_wvp);
+	if (c_wvp) {
+		RCache.set_c(c_wvp, m_wvp);
+		static int log_wvp = 0;
+		if (log_wvp++ < 10) {
+			Msg(" VK DEBUG XFORMS: set_W called. c_wvp BOUND. m_wvp._41=%f", m_wvp._41);
+			xrLogger::FlushLog();
+		}
+	} else {
+		static int log_wvp_null = 0;
+		if (log_wvp_null++ < 10) {
+			Msg(" VK DEBUG XFORMS: set_W called. c_wvp is NULL!");
+			xrLogger::FlushLog();
+		}
+	}
+
 	m_bInvWValid = false;
 	if (c_invw) apply_invw();
 	RCache.set_xform(D3DTS_WORLD, m);
@@ -22,6 +43,14 @@ void R_xforms::set_V(const Fmatrix& m)
 	m_wv.mul_43(m_v, m_w);
 	m_vp.mul(m_p, m_v);
 	m_wvp.mul(m_p, m_wv);
+
+#if defined(USE_VK)
+	if (!c_v) c_v = RCache.get_c("m_V");
+	if (!c_vp) c_vp = RCache.get_c("m_VP");
+	if (!c_wv) c_wv = RCache.get_c("m_WV");
+	if (!c_wvp) c_wvp = RCache.get_c("m_WVP");
+#endif
+
 	if (c_v) RCache.set_c(c_v, m_v);
 	if (c_vp) RCache.set_c(c_vp, m_vp);
 	if (c_wv) RCache.set_c(c_wv, m_wv);
@@ -34,6 +63,13 @@ void R_xforms::set_P(const Fmatrix& m)
 	m_p.set(m);
 	m_vp.mul(m_p, m_v);
 	m_wvp.mul(m_p, m_wv);
+
+#if defined(USE_VK)
+	if (!c_p) c_p = RCache.get_c("m_P");
+	if (!c_vp) c_vp = RCache.get_c("m_VP");
+	if (!c_wvp) c_wvp = RCache.get_c("m_WVP");
+#endif
+
 	if (c_p) RCache.set_c(c_p, m_p);
 	if (c_vp) RCache.set_c(c_vp, m_vp);
 	if (c_wvp) RCache.set_c(c_wvp, m_wvp);

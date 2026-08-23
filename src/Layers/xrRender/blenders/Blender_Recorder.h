@@ -10,6 +10,9 @@
 
 #pragma pack(push,4)
 
+#pragma warning(push)
+#pragma warning(disable:4121)
+
 class CBlender_Compile
 {
 public:
@@ -32,7 +35,7 @@ public:
 	CSimulator RS;
 	IBlender* BT;
 	ShaderElement* SH;
-#ifdef USE_DX11
+#if defined(USE_DX11) || defined(USE_VK)
 	enum
 	{
 		NO_TESS = 0,
@@ -55,9 +58,9 @@ private:
 
 	string128 pass_vs;
 	string128 pass_ps;
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	string128 pass_gs;
-#	ifdef USE_DX11
+#	if defined(USE_DX11) || defined(USE_VK)
 	string128 pass_hs;
 	string128 pass_ds;
 	string128 pass_cs;
@@ -127,7 +130,7 @@ public:
 	void StageEnd();
 
 	// R1/R2-compiler	[programmable]
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	void i_dx10Address(u32 s, u32 address);
 	void i_dx10Filter_Min(u32 s, u32 f);
 	void i_dx10Filter_Mip(u32 s, u32 f);
@@ -151,11 +154,11 @@ public:
 	void r_Pass(LPCSTR vs, LPCSTR ps, bool bFog, BOOL bZtest = TRUE, BOOL bZwrite = TRUE, BOOL bABlend = FALSE,
 	            D3DBLEND abSRC = D3DBLEND_ONE, D3DBLEND abDST = D3DBLEND_ZERO, BOOL aTest = FALSE, u32 aRef = 0);
 	void r_Constant(LPCSTR name, R_constant_setup* s);
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	void r_Pass(LPCSTR vs, LPCSTR gs, LPCSTR ps, bool bFog, BOOL bZtest = TRUE, BOOL bZwrite = TRUE,
 	            BOOL bABlend = FALSE, D3DBLEND abSRC = D3DBLEND_ONE, D3DBLEND abDST = D3DBLEND_ZERO, BOOL aTest = FALSE,
 	            u32 aRef = 0);
-#	ifdef USE_DX11
+#	if defined(USE_DX11) || defined(USE_VK)
 	void r_TessPass(LPCSTR vs, LPCSTR hs, LPCSTR ds, LPCSTR gs, LPCSTR ps, bool bFog, BOOL bZtest = TRUE,
 	                BOOL bZwrite = TRUE, BOOL bABlend = FALSE, D3DBLEND abSRC = D3DBLEND_ONE,
 	                D3DBLEND abDST = D3DBLEND_ZERO, BOOL aTest = FALSE, u32 aRef = 0);
@@ -199,5 +202,6 @@ public:
 	ShaderElement* _lua_Compile(LPCSTR namesp, LPCSTR name);
 };
 #pragma pack(pop)
+#pragma warning(pop)
 
 #endif // !defined(AFX_BLENDER_RECORDER_H__1F549674_8674_4EB2_95E6_E6BC19218A6C__INCLUDED_)

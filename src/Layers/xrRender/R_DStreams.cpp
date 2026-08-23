@@ -18,7 +18,7 @@ void _VertexStream::Create()
 	DEV->Evict();
 
 	mSize = rsDVB_Size * 1024;
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	D3D_BUFFER_DESC bufferDesc;
 	bufferDesc.ByteWidth = mSize;
 	bufferDesc.Usage = D3D_USAGE_DYNAMIC;
@@ -177,7 +177,7 @@ void _IndexStream::Create()
 
 	mSize = rsDIB_Size * 1024;
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	D3D_BUFFER_DESC bufferDesc;
 	bufferDesc.ByteWidth = mSize;
 	bufferDesc.Usage = D3D_USAGE_DYNAMIC;

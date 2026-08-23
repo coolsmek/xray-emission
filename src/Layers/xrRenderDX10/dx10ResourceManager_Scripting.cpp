@@ -88,7 +88,7 @@ public:
 
 #pragma warning( push )
 #pragma warning( disable : 4512)
-// wrapper																																					
+// wrapper
 class adopt_compiler
 {
 	CBlender_Compile* C;
@@ -312,7 +312,7 @@ static void *lua_alloc		(void *ud, void *ptr, size_t osize, size_t nsize) {
 	}
 
 	if ( !ptr ) {
-		void* const result			= 
+		void* const result			=
 			g_render_lua_allocator.malloc_impl((u32)nsize);
 		memory_monitor::monitor_alloc (result,nsize,"render:LUA");
 		return						result;
@@ -329,6 +329,14 @@ static void *lua_alloc		(void *ud, void *ptr, size_t osize, size_t nsize) {
 // export
 extern int luaopen_lua_extensions(lua_State* L, bool IsDebug = false);
 
+// Fallback luabind allocator used in tool-mode (XrayModelViewer) where
+// xrServerEntities / CScriptEngine never calls setup_luabind_allocator().
+static void* s_luabind_alloc(luabind::memory_allocation_function_parameter, void const* ptr, size_t sz)
+{
+	if (!ptr) return Memory.mem_alloc(sz);
+	return Memory.mem_realloc(const_cast<void*>(ptr), sz);
+}
+
 void CResourceManager::LS_Load()
 {
 #ifdef USE_GSC_MEM_ALLOC
@@ -343,7 +351,7 @@ void CResourceManager::LS_Load()
 		return;
 	}
 
-	// initialize lua standard library functions 
+	// initialize lua standard library functions
 	luaopen_base(LSVM);
 	luaopen_table(LSVM);
 	luaopen_string(LSVM);
@@ -352,6 +360,14 @@ void CResourceManager::LS_Load()
 
 	luaopen_lua_extensions(LSVM);
 
+	// luabind::allocator must be set before luabind::open; in the normal game
+	// xrServerEntities/CScriptEngine does this via setup_luabind_allocator().
+	// In tool-mode that module is never loaded, so set it here as a fallback.
+	if (!::luabind::allocator)
+	{
+		::luabind::allocator           = &s_luabind_alloc;
+		::luabind::allocator_parameter = nullptr;
+	}
 	::luabind::open(LSVM);
 #if !XRAY_EXCEPTIONS
 	if (0 == ::luabind::get_error_callback())
@@ -419,7 +435,7 @@ void CResourceManager::LS_Load()
 		.def("dx10zfunc", &adopt_compiler::_dx10ZFunc, return_reference_to<1>())
 
 		.def("dx10sampler", &adopt_compiler::_dx10sampler) // returns sampler-object
-		.def("dx10Options", &adopt_compiler::_dx10Options), // returns options-object	
+		.def("dx10Options", &adopt_compiler::_dx10Options), // returns options-object
 
 
 		class_<adopt_blend>("blend")

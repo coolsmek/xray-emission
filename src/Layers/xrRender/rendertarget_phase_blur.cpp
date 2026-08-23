@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#ifndef USE_VK
 
 
 IC bool SortLights(light* i, light* j)
@@ -1021,4 +1022,5 @@ void CRenderTarget::phase_ssfx_motion_blur()
 	HW.pContext->CopyResource(rt_Generic_0->pTexture->surface_get(), dest_rt->pTexture->surface_get());
 }
 
+#endif
 #endif

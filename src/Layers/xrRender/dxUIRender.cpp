@@ -52,7 +52,7 @@ void dxUIRender::FlushTriList()
 	VERIFY(PrimitiveType==ptTriList);
 	VERIFY(u32(pv-start_pv)<=m_iMaxVerts);
 
-	std::ptrdiff_t p_cnt		= (pv-start_pv)/3;							
+	std::ptrdiff_t p_cnt		= (pv-start_pv)/3;
 	RCache.Vertex.Unlock		(u32(pv-start_pv),hGeom_fan.stride());
 	RCache.set_Geometry			(hGeom_fan);
 	if (p_cnt!=0)RCache.Render	(D3DPT_TRIANGLELIST,vOffset,u32(p_cnt));
@@ -156,7 +156,10 @@ void dxUIRender::SetScissor(Irect* rect)
 void dxUIRender::GetActiveTextureResolution(Fvector2& res)
 {
 	CTexture* T = RCache.get_ActiveTexture(0);
-	res.set(float(T->get_Width()), float(T->get_Height()));
+    //if (T)
+	    res.set(float(T->get_Width()), float(T->get_Height()));
+    //else
+        //res.set(float(Device.dwWidth), float(Device.dwHeight));
 }
 
 LPCSTR dxUIRender::UpdateShaderName(LPCSTR tex_name, LPCSTR sh_name)

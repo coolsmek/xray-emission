@@ -9,6 +9,9 @@ class dx10ConstantBuffer : public xr_resource_named
 {
 public:
 	dx10ConstantBuffer(ID3DShaderReflectionConstantBuffer* pTable);
+#if defined(USE_VK)
+	dx10ConstantBuffer(const char* name, u32 size);
+#endif
 	~dx10ConstantBuffer();
 
 	bool Similar(dx10ConstantBuffer& _in);
@@ -28,6 +31,16 @@ public:
 
 	void* AccessDirect(R_constant_load& L, u32 DataSize);
 
+	// VK-specific accessors for ring buffer allocation
+#if defined(USE_VK)
+	const void* GetRawData() const { return m_pBufferData; }
+	u32 GetRawSize() const { return m_uiBufferSize; }
+	bool IsDirty() const { return m_bChanged; }
+	u32 GetDynamicOffset() const { return m_vkDynamicOffset; }
+	void SetDynamicOffset(u32 offset) { m_vkDynamicOffset = offset; }
+	u32 GetFlushFrame() const { return m_vkFlushFrame; }
+#endif
+
 private:
 	Fvector4* Access(u16 offset);
 
@@ -44,6 +57,11 @@ private:
 	u32 m_uiBufferSize; //	Cache buffer size for debug validation
 	void* m_pBufferData;
 	bool m_bChanged;
+
+#if defined(USE_VK)
+	u32 m_vkDynamicOffset = 0;  // Ring buffer offset from last AllocateDynamicUniform
+	u32 m_vkFlushFrame = 0xFFFFFFFF; // Frame stamp of the last flush
+#endif
 
 	static const u32 lineSize = sizeof(Fvector4);
 

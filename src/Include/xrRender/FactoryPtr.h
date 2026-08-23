@@ -4,7 +4,11 @@
 
 #include "RenderFactory.h"
 #include "../../Include/xrAPI/xrAPI.h"
-#include "../../Layers/xrRender/dxRenderFactory.h"
+#if defined(USE_VK)
+#   include "../../Layers/xrRenderVK/vkRenderFactory.h"
+#else
+#   include "../../Layers/xrRender/dxRenderFactory.h"
+#endif
 
 #define FACTORY_PTR_INSTANCIATE(Class) \
 	inline void FactoryPtr<I##Class>::CreateObject(void) \

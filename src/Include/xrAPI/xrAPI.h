@@ -15,8 +15,13 @@
 class IRender_interface;
 extern XRAPI_API IRender_interface* Render;
 
+#if defined(USE_VK)
+class IRenderFactory;
+extern XRAPI_API IRenderFactory* RenderFactory;
+#else
 class dxRenderFactory;
 extern XRAPI_API dxRenderFactory* RenderFactory;
+#endif
 
 class CDUInterface;
 extern XRAPI_API CDUInterface* DU;

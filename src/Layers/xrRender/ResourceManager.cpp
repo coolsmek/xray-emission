@@ -57,10 +57,10 @@ IBlender* CResourceManager::_GetBlender(LPCSTR Name)
 	if (I==m_blenders.end())	return 0;
 #else
 	//	TODO: DX10: When all shaders are ready switch to common path
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	if (I == m_blenders.end())
 	{
-		Msg("DX10: Shader '%s' not found in library.", Name);
+		Msg("VK/DX10: Shader '%s' not found in library.", Name);
 		return 0;
 	}
 #endif
@@ -191,6 +191,8 @@ Shader* CResourceManager::_cpp_Create(IBlender* B, LPCSTR s_shader, LPCSTR s_tex
 #ifdef _EDITOR
 	if (!C.BT)			{ ELog.Msg(mtError,"Can't find shader '%s'",s_shader); return 0; }
 	C.bEditor			= TRUE;
+#elif defined(USE_VK)
+	if (!C.BT)			{ Msg("! VK: Can't find shader '%s', skipping", s_shader); return 0; }
 #endif
 
 	// Parse names
@@ -198,8 +200,8 @@ Shader* CResourceManager::_cpp_Create(IBlender* B, LPCSTR s_shader, LPCSTR s_tex
 	_ParseList(C.L_constants, s_constants);
 	_ParseList(C.L_matrices, s_matrices);
 
-#if defined(USE_DX11)
-	if (::Render->hud_loading && RImplementation.o.ssfx_core)
+#if defined(USE_DX11) || defined(USE_VK)
+	if (::Render->hud_loading)
 	{
 		C.HudElement = true;
 	}
@@ -537,7 +539,7 @@ void CResourceManager::_DumpMemoryUsage()
 void CResourceManager::Evict()
 {
 	//	TODO: DX10: check if we really need this method
-#if !defined(USE_DX10) && !defined(USE_DX11)
+#if !defined(USE_DX10) && !defined(USE_DX11) && !defined(USE_VK)
 	CHK_DX(HW.pDevice->EvictManagedResources());
 #endif	//	USE_DX10
 }

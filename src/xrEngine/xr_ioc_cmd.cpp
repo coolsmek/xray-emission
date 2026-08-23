@@ -478,6 +478,9 @@ public:
 
 	virtual void Execute(LPCSTR args)
 	{
+		if (strstr(Core.Params, "-verify_settings_menu"))
+			Msg("VERIFY_SETTINGS_MENU: CCC_VID_Reset::Execute - Device.b_is_Ready=%s", Device.b_is_Ready ? "true" : "false");
+
 		if (Device.b_is_Ready)
 		{
 			Device.Reset();
@@ -498,6 +501,10 @@ public:
 		if (cnt == 2)
 		{
 			const bool changed = (psCurrentVidMode[0] != _w) || (psCurrentVidMode[1] != _h);
+
+			if (strstr(Core.Params, "-verify_settings_menu"))
+				Msg("VERIFY_SETTINGS_MENU: CCC_VidMode::Execute - parsed %dx%d, changed=%s, Device.b_is_Ready=%s", _w, _h, changed ? "true" : "false", Device.b_is_Ready ? "true" : "false");
+
 			psCurrentVidMode[0] = _w;
 			psCurrentVidMode[1] = _h;
 			if (changed && Device.b_is_Ready)
@@ -745,7 +752,12 @@ public:
 		isR2 |= strcmp("renderer_r2.5", renderer_name) == 0;
 		psDeviceFlags.set(rsR2, isR2);
 		psDeviceFlags.set(rsR3, strcmp("renderer_r3", renderer_name) == 0);
-		psDeviceFlags.set(rsR4, strcmp("renderer_r4", renderer_name) == 0);
+		// Treat the Vulkan renderer as an R4-class deferred renderer so that
+		// R2+/R4 gated features (campfires, torches, flashlights, dynamic zones, etc.)
+		// keep working when running under renderer_vk.
+		bool isR4 = strcmp("renderer_r4", renderer_name) == 0;
+		isR4 |= strcmp("renderer_vk", renderer_name) == 0;
+		psDeviceFlags.set(rsR4, isR4);
 
 		r2_sun_static = strcmp("renderer_r1", renderer_name) == 0;
 		r2_sun_static |= strcmp("renderer_r2a", renderer_name) == 0;

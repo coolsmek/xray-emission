@@ -36,7 +36,7 @@ enum class ECoreParams : u8
 	// Game
 	use_callstack,
 	debug_ge,
-	
+
 	// API
 	renderdoc,
 
@@ -94,6 +94,8 @@ enum class ECoreParams : u8
 	savescreenshots,
 	lua_studio,
 	clear_cs_constants,
+    //new
+    no_mods,
 
     //.peak volumetrics
     volumetric1,

@@ -9,6 +9,10 @@
       <Configuration>Release-AVX</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseVK-AVX|x64">
+      <Configuration>ReleaseVK-AVX</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Release|x64">
       <Configuration>Release</Configuration>
       <Platform>x64</Platform>
@@ -75,6 +79,9 @@
     <CharacterSet>MultiByte</CharacterSet>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='ReleaseVK-AVX|x64'">
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -165,7 +172,7 @@
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vulkan-1.lib;shaderc_shared.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)3rd party\luajit-2\src\;$(xrSdkDir)libraries\x64;$(xrLibDir);$(XRAY_16X_LIBS)OpenAutomate\libraries;$(SolutionDir)x64\Release;$(xrGameDir)bin_dbg;$(VULKAN_SDK)\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <SubSystem>NotSet</SubSystem>
       <LargeAddressAware>true</LargeAddressAware>
@@ -199,7 +206,7 @@
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vulkan-1.lib;shaderc_shared.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)3rd party\luajit-2\src\;$(xrSdkDir)libraries\x64;$(xrLibDir);$(XRAY_16X_LIBS)OpenAutomate\libraries;$(SolutionDir)x64\Release;$(xrGameDir)bin_dbg;$(VULKAN_SDK)\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <SubSystem>NotSet</SubSystem>
       <LargeAddressAware>true</LargeAddressAware>
@@ -222,7 +229,7 @@
       <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <AdditionalIncludeDirectories>.;$(SolutionDir)3rd party\imgui\;$(SolutionDir)3rd party\luajit-2\src\;$(SolutionDir)3rd party\luabind\;$(SolutionDir)xrCore;$(xrSdkDir)include;$(XRAY_16X_LIBS)OpenAutomate\inc;$(XRAY_16X_LIBS)nvapi;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>XRCORE_PROFILER;USE_VERIFY_IN_RELEASE;USE_VK;WIN32;NDEBUG;_WINDOWS;_USRDLL;XRRENDER_VK_EXPORTS;_SECURE_SCL=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>VK_ENABLE_TESTS;XRCORE_PROFILER;USE_VERIFY_IN_RELEASE;USE_VK;WIN32;NDEBUG;_WINDOWS;_USRDLL;XRRENDER_VK_EXPORTS;_SECURE_SCL=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
@@ -238,7 +245,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vulkan-1.lib;shaderc_shared.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)3rd party\luajit-2\src\;$(xrSdkDir)libraries\x64;$(xrLibDir);$(XRAY_16X_LIBS)OpenAutomate\libraries;$(SolutionDir)x64\Release;$(xrGameDir)bin_dbg;$(VULKAN_SDK)\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <SubSystem>NotSet</SubSystem>
       <LargeAddressAware>true</LargeAddressAware>
@@ -250,6 +257,11 @@
       <IgnoreSpecificDefaultLibraries>LIBCMT</IgnoreSpecificDefaultLibraries>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /Y /D "$(VULKAN_SDK)\Bin\shaderc_shared.dll" "$(xrGameDir)bin_dbg\$(Platform)\$(Configuration)\"
+xcopy /Y /D "$(VULKAN_SDK)\Bin\shaderc_shared.dll" "$(xrGameDir)bin_dbg\$(Platform)\ReleaseVK-AVX\"</Command>
+      <Message>Copying shaderc_shared.dll to VerifiedVK and ReleaseVK-AVX output directories</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Verified|x64'">
     <ClCompile>
@@ -277,7 +289,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vulkan-1.lib;shaderc_shared.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)3rd party\luajit-2\src\;$(xrSdkDir)libraries\x64;$(xrLibDir);$(XRAY_16X_LIBS)OpenAutomate\libraries;$(SolutionDir)x64\Release;$(xrGameDir)bin_dbg;$(VULKAN_SDK)\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <SubSystem>NotSet</SubSystem>
       <LargeAddressAware>true</LargeAddressAware>
@@ -300,7 +312,7 @@
       <EnableFiberSafeOptimizations>false</EnableFiberSafeOptimizations>
       <WholeProgramOptimization>false</WholeProgramOptimization>
       <AdditionalIncludeDirectories>.;$(SolutionDir)3rd party\imgui\;$(SolutionDir)3rd party\luajit-2\src\;$(SolutionDir)3rd party\luabind\;$(SolutionDir)xrCore;$(xrSdkDir)include;$(XRAY_16X_LIBS)OpenAutomate\inc;$(XRAY_16X_LIBS)nvapi;$(VULKAN_SDK)\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>XRCORE_PROFILER;USE_VERIFY_IN_RELEASE;_DISABLE_VECTOR_ANNOTATION;_DISABLE_STRING_ANNOTATION;USE_VK;WIN32;NDEBUG;_WINDOWS;_USRDLL;XRRENDER_VK_EXPORTS;_SECURE_SCL=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>VK_ENABLE_TESTS;XRCORE_PROFILER;USE_VERIFY_IN_RELEASE;_DISABLE_VECTOR_ANNOTATION;_DISABLE_STRING_ANNOTATION;USE_VK;WIN32;NDEBUG;_WINDOWS;_USRDLL;XRRENDER_VK_EXPORTS;_SECURE_SCL=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <EnableEnhancedInstructionSet>NotSet</EnableEnhancedInstructionSet>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
@@ -316,7 +328,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vulkan-1.lib;shaderc_shared.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)3rd party\luajit-2\src\;$(xrSdkDir)libraries\x64;$(xrLibDir);$(XRAY_16X_LIBS)OpenAutomate\libraries;$(SolutionDir)x64\Release;$(xrGameDir)bin_dbg;$(VULKAN_SDK)\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <SubSystem>NotSet</SubSystem>
       <LargeAddressAware>true</LargeAddressAware>
@@ -351,7 +363,7 @@
       <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>vulkan-1.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vulkan-1.lib;shaderc_shared.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)3rd party\luajit-2\src\;$(xrSdkDir)libraries\x64;$(xrLibDir);$(XRAY_16X_LIBS)OpenAutomate\libraries;$(SolutionDir)x64\Release;$(xrGameDir)bin_dbg;$(VULKAN_SDK)\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <SubSystem>NotSet</SubSystem>
       <LargeAddressAware>true</LargeAddressAware>
@@ -441,8 +453,8 @@
     <ClInclude Include="..\xrRender\du_cylinder.h" />
     <ClInclude Include="..\xrRender\du_sphere.h" />
     <ClInclude Include="..\xrRender\du_sphere_part.h" />
-    <!--<ClInclude Include="..\xrRender\dxApplicationRender.h" />
-    <ClInclude Include="..\xrRender\dxConsoleRender.h" />
+    <ClInclude Include="..\xrRender\dxApplicationRender.h" />
+    <!--<ClInclude Include="..\xrRender\dxConsoleRender.h" />
     <ClInclude Include="..\xrRender\dxDebugRender.h" />
     <ClInclude Include="..\xrRender\dxEnvironmentRender.h" />
     <ClInclude Include="..\xrRender\dxFontRender.h" />
@@ -527,7 +539,7 @@
     <ClInclude Include="..\xrRender\xrRender_console.h" />
     <ClInclude Include="..\xrRender\xrStripify.h" />
     <ClInclude Include="..\xrRender\xr_effgamma.h" />
-    <ClInclude Include="Backend\vk_Backend.h" />
+    <ClInclude Include="Backend\vkR_Backend_Runtime.h" />
     <ClInclude Include="Backend\vk_CommandPool.h" />
     <ClInclude Include="Backend\vk_FrameContext.h" />
     <ClInclude Include="blender_bloom_build.h" />
@@ -574,6 +586,8 @@
     <ClInclude Include="Resources\vk_BufferUtils.h" />
     <ClInclude Include="Resources\vk_ResourceManager.h" />
     <ClInclude Include="Resources\vk_Shader.h" />
+    <ClInclude Include="Resources\vk_ShaderReflection.h" />
+    <ClInclude Include="Resources\vk_TextureUtils.h" />
     <ClInclude Include="rVK.h" />
     <!--<ClInclude Include="R_Backend_LOD.h" />-->
     <ClInclude Include="SMAP_Allocator.h" />
@@ -581,11 +595,30 @@
     <!--<ClInclude Include="..\xrRenderDX10\dx10EventWrapper.h" />-->
     <ClInclude Include="vkDebugRender.h" />
     <ClInclude Include="vkRenderFactory.h" />
-    <ClInclude Include="vkUIRender.h" />
+    <ClInclude Include="light_gi.h" />
+    <ClInclude Include="vk_UIRender.h" />
+    <ClInclude Include="vk_ImGuiRender.h" />
+    <ClInclude Include="vk_EnvironmentRender.h" />
+    <ClInclude Include="vk_LensFlareRender.h" />
+    <ClInclude Include="vk_WeatherRender.h" />
+    <ClInclude Include="vk_EnvDescriptorRender.h" />
+    <ClInclude Include="vk_WallMarkArray.h" />
+    <ClInclude Include="vk_UIShader.h" />
+    <ClInclude Include="vk_DebugMarkers.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\3rd party\spirv-reflect\spirv_reflect.c">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="..\..\xrEngine\ai_script_lua_debug.cpp" />
-    <ClCompile Include="..\..\xrEngine\ai_script_lua_extension.cpp" />
+    <ClCompile Include="..\..\xrEngine\ai_script_lua_extension.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)'=='Release'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)'=='ProfiledVK'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)'=='VerifiedVK'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)'=='Verified'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)'=='VerifiedVKASAN'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)'=='Release-AVX'">true</ExcludedFromBuild>
+    </ClCompile>
     <!--<ClCompile Include="..\xrRenderDX10\3DFluid\dx103DFluidBlenders.cpp" />
     <ClCompile Include="..\xrRenderDX10\3DFluid\dx103DFluidData.cpp" />
     <ClCompile Include="..\xrRenderDX10\3DFluid\dx103DFluidEmitters.cpp" />
@@ -596,13 +629,13 @@
     <ClCompile Include="..\xrRenderDX10\3DFluid\dx103DFluidVolume.cpp" />
     <ClCompile Include="..\xrRenderDX10\Blender_Recorder_R3.cpp" />
     <ClCompile Include="..\xrRenderDX10\DX10 Rain\dx10RainBlender.cpp" />
-    <ClCompile Include="..\xrRenderDX10\dx10BufferUtils.cpp" />
+    <ClCompile Include="..\xrRenderDX10\dx10BufferUtils.cpp" />-->
     <ClCompile Include="..\xrRenderDX10\dx10ConstantBuffer.cpp" />
-    <ClCompile Include="..\xrRenderDX10\dx10DetailManager_VS.cpp" />
-    <ClCompile Include="..\xrRenderDX10\dx10ResourceManager_Resources.cpp" />
+    <!--<ClCompile Include="..\xrRenderDX10\dx10DetailManager_VS.cpp" />-->
+    <!--<ClCompile Include="..\xrRenderDX10\dx10ResourceManager_Resources.cpp" />-->
     <ClCompile Include="..\xrRenderDX10\dx10ResourceManager_Scripting.cpp" />
-    <ClCompile Include="..\xrRenderDX10\dx10r_constants.cpp" />
-    <ClCompile Include="..\xrRenderDX10\dx10r_constants_cache.cpp" />
+    <!--<ClCompile Include="..\xrRenderDX10\dx10r_constants.cpp" />-->
+    <!--<ClCompile Include="..\xrRenderDX10\dx10r_constants_cache.cpp" />
     <ClCompile Include="..\xrRenderDX10\dx10SH_RT.cpp" />
     <ClCompile Include="..\xrRenderDX10\dx10SH_Texture.cpp" />
     <ClCompile Include="..\xrRenderDX10\dx10StateUtils.cpp" />
@@ -644,8 +677,8 @@
     <ClCompile Include="..\xrRender\du_cylinder.cpp" />
     <ClCompile Include="..\xrRender\du_sphere.cpp" />
     <ClCompile Include="..\xrRender\du_sphere_part.cpp" />
-    <!--<ClCompile Include="..\xrRender\dxApplicationRender.cpp" />
-    <ClCompile Include="..\xrRender\dxConsoleRender.cpp" />
+    <ClCompile Include="..\xrRender\dxApplicationRender.cpp" />
+    <!--<ClCompile Include="..\xrRender\dxConsoleRender.cpp" />
     <ClCompile Include="..\xrRender\dxDebugRender.cpp" />
     <ClCompile Include="..\xrRender\dxEnvironmentRender.cpp" />
     <ClCompile Include="..\xrRender\dxFontRender.cpp" />
@@ -706,7 +739,9 @@
     <ClCompile Include="..\xrRender\ResourceManager.cpp" />
     <ClCompile Include="..\xrRender\ResourceManager_Loader.cpp" />
     <ClCompile Include="..\xrRender\ResourceManager_Reset.cpp" />
-    <ClCompile Include="..\xrRender\R_Backend.cpp" />
+    <ClCompile Include="..\xrRender\R_Backend.cpp">
+        <PreprocessorDefinitions>USE_VK;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
     <ClCompile Include="..\xrRender\R_Backend_DBG.cpp" />
     <ClCompile Include="..\xrRender\R_Backend_hemi.cpp" />
     <ClCompile Include="..\xrRender\R_Backend_Runtime.cpp" />
@@ -714,7 +749,7 @@
     <ClCompile Include="..\xrRender\R_Backend_xform.cpp" />
     <ClCompile Include="..\xrRender\R_calculate.cpp" />
     <ClCompile Include="..\xrRender\r_constants.cpp" />
-    <ClCompile Include="..\xrRender\R_DStreams.cpp" />
+    <ClCompile Include="vk_R_DStreams.cpp" />
     <ClCompile Include="..\xrRender\r__dsgraph_build.cpp" />
     <ClCompile Include="..\xrRender\r__dsgraph_manager.cpp" />
     <ClCompile Include="..\xrRender\r__dsgraph_render.cpp" />
@@ -769,19 +804,60 @@
     <ClCompile Include="blender_ssao.cpp" />
     <ClCompile Include="blender_ss_sunshafts.cpp" />
     <ClCompile Include="Managers\vk_DescriptorManager.cpp" />
+    <ClCompile Include="Managers\vk_MemoryManager.cpp" />
+    <ClCompile Include="Managers\vk_vma_impl.cpp">
+      <!-- VMA header-only implementation: must compile WITHOUT the PCH so that
+           #define VMA_IMPLEMENTATION is seen before vk_mem_alloc.h is first included. -->
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='ProfiledVK|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='VerifiedVK|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Verified|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='VerifiedVKASAN|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release-AVX|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="Managers\vk_PipelineCache.cpp" />
     <ClCompile Include="RenderTarget\vk_LayoutTransitions.cpp" />
     <ClCompile Include="RenderTarget\vk_RenderPasses.cpp" />
     <!--<ClCompile Include="ComputeShader.cpp" />-->
     <!--<ClCompile Include="CSCompiler.cpp" />-->
-    <!--<ClCompile Include="dx11HDAOCSBlender.cpp" />
-    <ClCompile Include="dx11MinMaxSMBlender.cpp" />-->
+    <!--<ClCompile Include="dx11HDAOCSBlender.cpp" />-->
+    <!--<ClCompile Include="dx11MinMaxSMBlender.cpp" />-->
     <!--<ClCompile Include="light_GI.cpp" />-->
     <ClCompile Include="RenderTarget\vk_RenderTarget.cpp" />
+    <ClCompile Include="Tools\vk_ToolSceneRenderer.cpp" />
     <ClCompile Include="Resources\vk_BufferUtils.cpp" />
+    <ClCompile Include="Resources\vk_ResourceManager.cpp" />
     <ClCompile Include="Resources\vk_ComputeShader.cpp" />
     <ClCompile Include="Resources\vk_ShaderCompiler.cpp" />
+    <ClCompile Include="Resources\vk_ShaderReflection.cpp" />
+    <ClCompile Include="Resources\vk_SH_RT.cpp" />
+    <ClCompile Include="Resources\vk_SH_Texture.cpp" />
+    <ClCompile Include="Resources\vk_TextureUtils.cpp" />
+    <ClCompile Include="Resources\vk_Texture.cpp" />
+    <ClCompile Include="Resources\vk_TextureLoad.cpp" />
+    <ClCompile Include="Resources\vk_r_constants.cpp" />
+    <ClCompile Include="Resources\vk_ResourceManager_Resources.cpp" />
+    <ClCompile Include="..\xrRender\SH_Texture.cpp" />
     <ClCompile Include="rVK.cpp" />
+    <ClCompile Include="vkRenderFactory.cpp" />
+    <ClCompile Include="vkRenderDeviceRender.cpp" />
+    <ClCompile Include="vk_FontRender.cpp" />
+    <ClCompile Include="vk_UIRender.cpp" />
+    <ClCompile Include="vk_ImGuiRender.cpp" />
+    <ClCompile Include="vk_EnvironmentRender.cpp" />
+    <ClCompile Include="vk_WallMarkArray.cpp" />
+    <ClCompile Include="vk_UIShader.cpp" />
+    <ClCompile Include="vk_D3DUtils_stubs.cpp" />
+    <ClCompile Include="vk_DetailManager_stubs.cpp" />
+    <ClCompile Include="vk_dxRenderFactory_compat.cpp">
+      <!-- No PCH: avoids pulling in vkRenderFactory.h which conflicts with dxRenderFactory RenderFactoryImpl -->
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='ProfiledVK|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='VerifiedVK|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Verified|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='VerifiedVKASAN|x64'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release-AVX|x64'">NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="vk_HW.cpp" />
     <ClCompile Include="vk_TestHW.cpp" />
     <!--<ClCompile Include="r4.cpp" />
@@ -826,6 +902,51 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release-AVX|x64'">Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="xrRenderVK.cpp" />
+    <!-- ===== xrRenderVK Tests ===== -->
+    <ClCompile Include="Tests\vk_TestRunner.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
+    </ClCompile>
+    <!-- Layer 1: Infrastructure -->
+    <ClCompile Include="Tests\Layer1_Infrastructure\test_HW_lifecycle.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="Tests\Layer1_Infrastructure\test_MemoryManager.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="Tests\Layer1_Infrastructure\test_FreeAll.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
+    </ClCompile>
+    <!-- Layer 2: Shaders -->
+    <ClCompile Include="Tests\Layer2_Shaders\test_ShaderReflection.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="Tests\Layer2_Shaders\test_PipelineLayout.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="Tests\Layer2_Shaders\test_PipelineCache.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
+    </ClCompile>
+    <!-- Layer 3: Subsystems -->
+    <ClCompile Include="Tests\Layer3_Subsystems\test_TextureAlloc.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="Tests\Layer3_Subsystems\test_DynamicStreams.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="Tests\Layer3_Subsystems\test_VertexDecl.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
+    </ClCompile>
+    <!-- Layer 4: Validation -->
+    <ClCompile Include="Tests\Layer4_Validation\vk_DebugMessenger.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <!-- ===== xrRenderVK Test Headers ===== -->
+    <ClInclude Include="Tests\vk_TestRunner.h" />
+    <ClInclude Include="Tests\Layer2_Shaders\spirv_blobs\white_triangle_vert.h" />
+    <ClInclude Include="Tests\Layer2_Shaders\spirv_blobs\white_triangle_frag.h" />
+    <ClInclude Include="Tests\Layer4_Validation\vk_DebugMessenger.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="$(SolutionDir)3rd party\crypto\crypto.vcxproj">
@@ -840,6 +961,9 @@
       <Project>{ca0649dd-d089-423a-981c-46b57a884eb9}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Resources\vk_ResourceManager_Resources.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

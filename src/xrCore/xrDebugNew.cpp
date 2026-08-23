@@ -802,6 +802,17 @@ void format_message(LPSTR buffer, const u32& buffer_size)
 //AVO: simplify function
 LONG WINAPI UnhandledFilter(_EXCEPTION_POINTERS* pExceptionInfo)
 {
+    // Ensure thread-safe single execution of the unhandled exception filter.
+    // If multiple worker threads encounter fatal exceptions simultaneously, only the first
+    // thread enters the crash handler to prevent log corruption, recursive crash loops,
+    // and stack trace interleaving. Secondary crashing threads are parked indefinitely.
+    static volatile LONG bCrashHandled = 0;
+    if (InterlockedCompareExchange(&bCrashHandled, 1, 0) != 0)
+    {
+        Sleep(INFINITE);
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+
     xrLogger::SetImmediateMode(true);
 	string256 error_message;
 	format_message(error_message, sizeof(error_message));

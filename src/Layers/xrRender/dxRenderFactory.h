@@ -39,6 +39,8 @@ public:
 	RENDER_FACTORY_DECLARE(FontRender)
 };
 
+#if !defined(USE_VK)
 extern dxRenderFactory RenderFactoryImpl;
+#endif // !USE_VK
 
 #endif	//	RenderFactory_included

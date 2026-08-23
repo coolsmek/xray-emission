@@ -33,5 +33,7 @@ private:
 	ref_shader m_dbgShaders[dbgShaderCount];
 };
 
+#if !defined(USE_VK)
 extern dxDebugRender DebugRenderImpl;
 extern dxDebugRender* rdebug_render;
+#endif // !USE_VK

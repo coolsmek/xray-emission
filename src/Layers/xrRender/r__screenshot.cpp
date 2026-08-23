@@ -48,6 +48,7 @@ extern int ps_r4_hdr10_on;
 #if defined(USE_DX10) || defined(USE_DX11)
 void CRender::ScreenshotImpl(ScreenshotMode mode, LPCSTR name, CMemoryWriter* memory_writer)
 {
+#ifndef USE_VK
 	// demonized: Disable screenshots if HDR is enabled
 	if (ps_r4_hdr10_on) {
 		return;
@@ -237,12 +238,14 @@ void CRender::ScreenshotImpl(ScreenshotMode mode, LPCSTR name, CMemoryWriter* me
 	}
 
 	_RELEASE(pSrcTexture);
+#endif
 }
 
 #else	//	USE_DX10
 
 void CRender::ScreenshotImpl(ScreenshotMode mode, LPCSTR name, CMemoryWriter* memory_writer)
 {
+#ifndef USE_VK
 	if (!Device.b_is_Ready) return;
 
 	// Create temp-surface
@@ -382,7 +385,7 @@ void CRender::ScreenshotImpl(ScreenshotMode mode, LPCSTR name, CMemoryWriter* me
 			TGAdesc p;
 			p.format = IMG_24B;
 
-			//	TODO: DX10: This is totally incorrect but mimics 
+			//	TODO: DX10: This is totally incorrect but mimics
 			//	original behavior. Fix later.
 			hr = pFB->LockRect(&D, 0,D3DLOCK_NOSYSLOCK);
 			if (hr != D3D_OK) return;
@@ -407,6 +410,7 @@ void CRender::ScreenshotImpl(ScreenshotMode mode, LPCSTR name, CMemoryWriter* me
 
 _end_:
 	_RELEASE(pFB);
+#endif
 }
 
 #endif	//	USE_DX10
@@ -436,6 +440,8 @@ void CRender::ScreenshotAsyncBegin()
 
 void CRender::ScreenshotAsyncEnd(CMemoryWriter& memory_writer)
 {
+#ifndef USE_VK
+#ifndef USE_VK
 	VERIFY(!m_bMakeAsyncSS);
 
 	//	Don't own. No need to release.
@@ -472,14 +478,18 @@ void CRender::ScreenshotAsyncEnd(CMemoryWriter& memory_writer)
 #ifdef USE_DX11
 	HW.pContext->Unmap(pTex, 0);
 #else
-	pTex->Unmap(0);
 #endif
+#ifndef USE_VK
 }
+#endif
+#endif
+//}
 
 #else	//	USE_DX10
 
 void CRender::ScreenshotAsyncEnd(CMemoryWriter& memory_writer)
 {
+#ifndef USE_VK
 	if (!Device.b_is_Ready) return;
 
 	VERIFY(!m_bMakeAsyncSS);
@@ -556,19 +566,23 @@ void CRender::ScreenshotAsyncEnd(CMemoryWriter& memory_writer)
 	}
 
 	hr = pFB->UnlockRect();
+#endif
 }
 
 #endif	//	USE_DX10
 
+#ifndef USE_VK
 void DoAsyncScreenshot()
 {
-	RImplementation.Target->DoAsyncScreenshot();
+    RImplementation.Target->DoAsyncScreenshot();
 }
+#endif // USE_VK
 
 // Antglobes: Export Screenshot Func + variable resolution & encoding
 #if defined(USE_DX10) || defined(USE_DX11)
 void CRender::TakeScreenshot(LPCSTR path, Fvector2 dimensions, DxEncoding encoding)
 {
+#ifndef USE_VK
 	// demonized: Disable screenshots if HDR is enabled
 	if (ps_r4_hdr10_on) {
 		return;
@@ -598,17 +612,17 @@ void CRender::TakeScreenshot(LPCSTR path, Fvector2 dimensions, DxEncoding encodi
 	clamp(encoding, eDXE_A8R8G8B8, eDXE_DXT5);
 	switch (encoding)
 	{
-	case IRender_interface::eDXE_A8R8G8B8: 
+	case IRender_interface::eDXE_A8R8G8B8:
 	{
 		dx_encoding = DXGI_FORMAT_R8G8B8A8_UNORM;
 	}
 	break;
-	case IRender_interface::eDXE_DXT1: 
+	case IRender_interface::eDXE_DXT1:
 	{
 		dx_encoding = DXGI_FORMAT_BC1_UNORM;
 	}
 	break;
-	case IRender_interface::eDXE_DXT5: 
+	case IRender_interface::eDXE_DXT5:
 	{
 		dx_encoding = DXGI_FORMAT_BC5_UNORM;
 	}
@@ -647,7 +661,7 @@ void CRender::TakeScreenshot(LPCSTR path, Fvector2 dimensions, DxEncoding encodi
 		NULL, pSrcSmallTexture));
 #endif
 
-	
+
 
 	// save (logical & physical)
 	ID3DBlob* saved = 0;
@@ -670,13 +684,15 @@ void CRender::TakeScreenshot(LPCSTR path, Fvector2 dimensions, DxEncoding encodi
 
 	// cleanup
 	_RELEASE(pSrcSmallTexture);
+#endif
 }
 #else //DX
 // Antglobes: Export Screenshot Func + variable resolution & encoding
 void CRender::TakeScreenshot(LPCSTR path, Fvector2 dimensions, DxEncoding encoding)
 {
+#ifndef USE_VK
 	if (!Device.b_is_Ready) return;
-	
+
 	string_path fname;
 	if (0 == strext(path)) strconcat(sizeof(fname), fname, path, ".dds");
 	else xr_strcpy(fname, sizeof(fname), path);
@@ -769,5 +785,7 @@ void CRender::TakeScreenshot(LPCSTR path, Fvector2 dimensions, DxEncoding encodi
 
 _end_:
 	_RELEASE(pFB);
+#endif
 }
 #endif
+#endif  // USE_DX10 (ScreenshotAsyncEnd)

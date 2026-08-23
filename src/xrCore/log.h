@@ -31,6 +31,11 @@ public:
 	static void InitLog();
 	static void FlushLog();
 	static void CloseLog();
+	// Closes and releases the engine log file handle (stops writing to game dir)
+	// WITHOUT terminating the log thread or removing callbacks.
+	// Use this when you want the callback to keep receiving messages after
+	// the log file has been detached (e.g. tool mode redirecting to appdata/).
+	static void DetachLogFile();
 	static void SetImmediateMode(bool enable);
 
 	static void AddLogCallback(LogCallback logCb);

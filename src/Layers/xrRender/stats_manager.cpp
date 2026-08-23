@@ -23,6 +23,7 @@ void stats_manager::increment_stats(u32 size, enum_stats_buffer_type type, _D3DP
 
 void stats_manager::increment_stats(u32 size, enum_stats_buffer_type type, _D3DPOOL location, void* buff_ptr)
 {
+#ifndef USE_VK
 	if (g_dedicated_server)
 		return;
 
@@ -40,10 +41,12 @@ void stats_manager::increment_stats(u32 size, enum_stats_buffer_type type, _D3DP
 	
 	m_buffers_list.push_back(new_item);
 #endif
+#endif
 }
 
 void stats_manager::increment_stats_rtarget(ID3DTexture2D* buff)
 {
+#ifndef USE_VK
 	if (g_dedicated_server)
 		return;
 
@@ -59,10 +62,12 @@ void stats_manager::increment_stats_rtarget(ID3DTexture2D* buff)
 
 	u32 size = desc.Height * desc.Width * get_format_pixel_size(desc.Format);
 	increment_stats(size, enum_stats_buffer_type_rtarget, pool, buff);
+#endif
 }
 
 void stats_manager::increment_stats_vb(ID3DVertexBuffer* buff)
 {
+#ifndef USE_VK
 	if (g_dedicated_server)
 		return;
 
@@ -75,10 +80,12 @@ void stats_manager::increment_stats_vb(ID3DVertexBuffer* buff)
 	buff->GetDesc(&desc);
 	increment_stats(desc.Size, enum_stats_buffer_type_vertex, desc.Pool, buff);
 #endif
+#endif
 }
 
 void stats_manager::increment_stats_ib(ID3DIndexBuffer* buff)
 {
+#ifndef USE_VK
 	if (g_dedicated_server)
 		return;
 
@@ -91,10 +98,12 @@ void stats_manager::increment_stats_ib(ID3DIndexBuffer* buff)
 	buff->GetDesc(&desc);
 	increment_stats(desc.Size, enum_stats_buffer_type_index, desc.Pool, buff);
 #endif
+#endif
 }
 
 void stats_manager::decrement_stats_rtarget(ID3DTexture2D* buff)
 {
+#ifndef USE_VK
 	if (buff == NULL || g_dedicated_server)
 		return;
 
@@ -115,10 +124,12 @@ void stats_manager::decrement_stats_rtarget(ID3DTexture2D* buff)
 
 	u32 size = desc.Height * desc.Width * get_format_pixel_size(desc.Format);
 	decrement_stats(size, enum_stats_buffer_type_rtarget, pool, buff);
+#endif
 }
 
 void stats_manager::decrement_stats_vb(ID3DVertexBuffer* buff)
 {
+#ifndef USE_VK
 	if (buff == NULL || g_dedicated_server)
 		return;
 
@@ -136,10 +147,12 @@ void stats_manager::decrement_stats_vb(ID3DVertexBuffer* buff)
 	buff->GetDesc(&desc);
 	decrement_stats(desc.Size, enum_stats_buffer_type_vertex, desc.Pool, buff);
 #endif
+#endif
 }
 
 void stats_manager::decrement_stats_ib(ID3DIndexBuffer* buff)
 {
+#ifndef USE_VK
 	if (buff == NULL || g_dedicated_server)
 		return;
 
@@ -157,6 +170,7 @@ void stats_manager::decrement_stats_ib(ID3DIndexBuffer* buff)
 	buff->GetDesc(&desc);
 	decrement_stats(desc.Size, enum_stats_buffer_type_index, desc.Pool, buff);
 #endif
+#endif
 }
 
 void stats_manager::decrement_stats(u32 size, enum_stats_buffer_type type, _D3DPOOL location)
@@ -171,6 +185,7 @@ void stats_manager::decrement_stats(u32 size, enum_stats_buffer_type type, _D3DP
 
 void stats_manager::decrement_stats(u32 size, enum_stats_buffer_type type, _D3DPOOL location, void* buff_ptr)
 {
+#ifndef USE_VK
 	if (buff_ptr == 0 || g_dedicated_server)
 		return;
 
@@ -194,6 +209,7 @@ void stats_manager::decrement_stats(u32 size, enum_stats_buffer_type type, _D3DP
 #endif //DEBUG
 
 	memory_usage_summary[type][location] -= size;
+#endif
 }
 
 stats_manager::~stats_manager()

@@ -1294,6 +1294,13 @@ void CLevel::OnRender()
 			Render->RenderToTarget(Render->rtPDA);
 
 			ps_r4_hdr10_pda = 0;
+
+			// VK: the PDA 2D UI (pda->Draw) rendered through the font/UI path, which
+			// opens a render pass on the currently-bound RT and leaves UI pipeline/RT/
+			// pass state dirty. Because this runs BEFORE the scene G-buffer, that state
+			// leaks into scene draws (garbage color/position, PDA behind world). Force
+			// the UI pass closed and clear RT slots so phase_scene_* starts clean.
+			Render->FlushAndCloseUIPass();
 		}
 
 		if (Actor() && Actor()->m_bDelayDrawPickupItems)

@@ -440,6 +440,7 @@ public:
 	virtual u32 memory_usage() { return 0; }
 	virtual u32 active_phase() = 0; //Swartz: actor shadow
 	virtual void RenderToTarget(RRT target) = 0;
+	virtual void FlushAndCloseUIPass() {}; // VK: end active pass + clear RT/ZB slots
 	// Constructor/destructor
 	virtual ~IRender_interface();
 protected:

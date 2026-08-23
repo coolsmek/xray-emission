@@ -6,7 +6,7 @@
 IDirect3DStateBlock9* SimulatorStates::record()
 {
 	//	TODO: DX10: Implement equivalent for SimulatorStates::record for DX10
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	//VERIFY(!"SimulatorStates::record not implemented!");
 	return 0;
 #else	//	USE_DX10

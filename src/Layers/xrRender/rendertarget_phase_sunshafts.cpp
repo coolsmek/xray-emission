@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#ifndef USE_VK
 
 void CRenderTarget::phase_sunshafts()
 {
@@ -199,7 +200,5 @@ void CRenderTarget::phase_sunshafts()
 	RCache.Render(D3DPT_TRIANGLELIST, Offset, 0, 4, 0, 2);
 
 	RCache.set_Stencil(FALSE);
-#if defined(USE_DX10) || defined(USE_DX11)
-	HW.pContext->CopyResource(rt_Generic_0->pTexture->surface_get(), rt_Generic->pTexture->surface_get());
-#endif
 };
+#endif

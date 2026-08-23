@@ -119,8 +119,13 @@ void CRenderDevice::_Create(LPCSTR shName)
 	b_is_Ready = TRUE;
 	_SetupStates();
 
+	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRenderDevice::_Create: entering m_pRender->OnDeviceCreate"); xrLogger::FlushLog(); }
 	m_pRender->OnDeviceCreate(shName);
+	
+	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRenderDevice::_Create: entering m_imgui.OnDeviceCreate"); xrLogger::FlushLog(); }
 	m_imgui.OnDeviceCreate();
+	
+	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRenderDevice::_Create: done"); xrLogger::FlushLog(); }
 	dwFrame = 0;
 }
 
@@ -243,9 +248,13 @@ PROTECT_API void CRenderDevice::Create()
 	FS.update_path(fname, "$game_data$", "shaders.xr");
 
 	//////////////////////////////////////////////////////////////////////////
+	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRenderDevice::Create: entering _Create(fname)"); xrLogger::FlushLog(); }
 	_Create(fname);
 
+	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRenderDevice::Create: entering PreCache()"); xrLogger::FlushLog(); }
 	PreCache(0, false, false);
+	
+	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRenderDevice::Create: done"); xrLogger::FlushLog(); }
 
 	//SECUROM_MARKER_SECURITY_OFF(4)
 }

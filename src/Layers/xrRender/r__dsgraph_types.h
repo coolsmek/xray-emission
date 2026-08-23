@@ -94,12 +94,13 @@ namespace R_dsgraph
         }
 	};
 
-#if defined(USE_DX10) || defined(USE_DX11)	//	DX10 needs shader signature to propperly bind deometry to shader
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)	//	DX10 needs shader signature to propperly bind deometry to shader
 	using vs_type = SVS*;
 	using gs_type = ID3DGeometryShader*;
-#ifdef USE_DX11
+#if defined(USE_DX11) || defined(USE_VK)
 	using hs_type = ID3D11HullShader*;
 	using ds_type = ID3D11DomainShader*;
+	using cs_type = ID3D11ComputeShader*;
 #endif
 #else	//	USE_DX10
 	using vs_type = ID3DVertexShader*;
@@ -112,48 +113,21 @@ namespace R_dsgraph
 	template<typename T, bool Reverse>
 	using mapDSGraphItemsMap = FixedMAP<T, DSGraphItem<T, Reverse>, render_allocator>;
 
-	struct alignas(16) RenderPacketSortKey
-	{
-		// Calculated key for sorting
-		u64 high; // VS, GS, PS, HS
-		u64 low; // DS, Constants, State, Textures
-
-		bool operator<(const RenderPacketSortKey& other) const noexcept
-		{
-			if (high != other.high)
-				return high < other.high;
-			return low < other.low;
-		}
-
-		bool operator!=(const RenderPacketSortKey& other) const noexcept
-		{
-			return (high != other.high) || (low != other.low);
-		}
-
-        bool operator==(const RenderPacketSortKey& other) const noexcept
-        {
-            return (high == other.high) && (low == other.low);
-        }
-	};
-
 	struct RenderPacket
 	{
-		// Sorting key
-        RenderPacketSortKey sortKey;
-
 		// Visual data
 		DSGraphItem<u32, false> item;
 
 		// Pointers to resources (previously keys in FixedMAPs)
         ID3DState* pState;
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 		gs_type pGS;
 #else
         u64 _unused_pad_gs;
 #endif
 
-#ifdef USE_DX11
+#if defined(USE_DX11) || defined(USE_VK)
 		hs_type pHS;
 		ds_type pDS;
 #else
@@ -164,58 +138,31 @@ namespace R_dsgraph
 		ps_type pPS;
         R_constant_table* pCS;
 		STextureList* pTextures;
+        
+        // Geometry identity — used as final sort tiebreakers so all draws that
+        // share a vertex/index buffer are submitted contiguously (one VB/IB bind
+        // per run instead of ping-ponging). Restores DX11-parity batching.
+        ID3DVertexBuffer* pVB;
+        ID3DIndexBuffer*  pIB;
 
-        RenderPacket(const DSGraphItem<u32, false>& _item, const SPass& pass) : item(_item)
-        {
-            // Extract resource pointers from shader pass (previously used as map keys)
-#if defined(USE_DX10) || defined(USE_DX11)
-            pVS = &*pass.vs;
-            pGS = pass.gs->gs;
-#else
-            pVS = pass.vs->vs;
-#endif
-
-            pPS = pass.ps->ps;
-
-#ifdef USE_DX11
-            pHS = pass.hs->sh;
-            pDS = pass.ds->sh;
-#endif
-
-            pCS = pass.constants._get();
-            pState = pass.state->state;
-            pTextures = pass.T._get();
-
-            // Build sort key
-            // Optimized grouping based on profiling, example:
-            // States:4, GS:0, HS:0, DS:0 they are pretty much unused and/or unchanged
-            // VS:13, PS:28, CS:93, Tex:179. Grouping based on increasing change of state
-            // Low key is used just for sorting
-            u64 keyHigh = 0;
-            u64 keyLow = 0;
-
-            keyHigh |= ((u64)pState >> 4 & 0xFFFF) << 48;
-
-#if defined(USE_DX10) || defined(USE_DX11)
-            keyHigh |= ((u64)pGS >> 4 & 0xFFFF) << 32;
-#endif
-
-#ifdef USE_DX11
-            keyHigh |= ((u64)pHS >> 4 & 0xFFFF) << 16;
-            keyHigh |= ((u64)pDS >> 4 & 0xFFFF);
-#endif
-
-            keyLow |= ((u64)pVS >> 4 & 0xFFFF) << 48;
-            keyLow |= ((u64)pPS >> 4 & 0xFFFF) << 32;
-            keyLow |= ((u64)pCS >> 4 & 0xFFFF) << 16;
-            keyLow |= ((u64)pTextures >> 4 & 0xFFFF);
-
-            sortKey = { keyHigh, keyLow };
-        }
+        RenderPacket(const DSGraphItem<u32, false>& _item, const SPass& pass);
 
         bool operator<(const RenderPacket& other) const noexcept
         {
-            return sortKey < other.sortKey;
+            if (pState != other.pState) return pState < other.pState;
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
+            if (pGS != other.pGS) return pGS < other.pGS;
+#endif
+#if defined(USE_DX11) || defined(USE_VK)
+            if (pHS != other.pHS) return pHS < other.pHS;
+            if (pDS != other.pDS) return pDS < other.pDS;
+#endif
+            if (pVS != other.pVS) return pVS < other.pVS;
+            if (pPS != other.pPS) return pPS < other.pPS;
+            if (pCS != other.pCS) return pCS < other.pCS;
+            if (pTextures != other.pTextures) return pTextures < other.pTextures;
+            if (pVB != other.pVB) return pVB < other.pVB;
+            return pIB < other.pIB;
         }
 	};
 

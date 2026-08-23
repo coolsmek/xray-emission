@@ -5,6 +5,19 @@
 
 #include "R_sun_support.h"
 
+// In VK builds, D3DX9 is not included — define D3DXMATRIX as a local alias
+// so the matrix cast expressions below compile (memory layouts are identical).
+#ifdef USE_VK
+typedef Fmatrix D3DXMATRIX;
+inline Fmatrix* D3DXMatrixInverse(Fmatrix* out, float*, const Fmatrix* in) {
+    if (out && in) out->invert(*in); return out;
+}
+inline Fmatrix* D3DXMatrixOrthoOffCenterLH(Fmatrix* out,
+    float l, float r, float b, float t, float zn, float zf) {
+    if (out) out->build_projection_ortho(r - l, t - b, zn, zf); return out;
+}
+#endif // USE_VK
+
 constexpr float tweak_COP_initial_offs = 1200.f;
 
 float OLES_SUN_LIMIT_27_01_07 = 100.f;
@@ -109,7 +122,7 @@ void CRender::render_sun_cascade(u32 cascade_ind)
 			//******************************* Need to be placed after cuboid built **************************
 
 			// COP - 100 km away
-			cull_COP.mad(Device.vCameraPosition, fuckingsun->direction, -tweak_COP_initial_offs);			
+			cull_COP.mad(Device.vCameraPosition, fuckingsun->direction, -tweak_COP_initial_offs);
 
 			// Create approximate ortho-xform
 			// view: auto find 'up' and 'right' vectors
@@ -173,14 +186,35 @@ void CRender::render_sun_cascade(u32 cascade_ind)
 
 			// build viewport xform
 			float view_dim = float(o.smapsize);
-			Fmatrix m_viewport = {
-				view_dim / 2.f, 0.0f, 0.0f, 0.0f,
-				0.0f, -view_dim / 2.f, 0.0f, 0.0f,
-				0.0f, 0.0f, 1.0f, 0.0f,
-				view_dim / 2.f, view_dim / 2.f, 0.0f, 1.0f
-			};
+			Fmatrix m_viewport;
+			m_viewport.identity();
+			m_viewport._11 = view_dim / 2.f;
+			m_viewport._22 = -view_dim / 2.f;
+			m_viewport._33 = 1.0f;
+			m_viewport._41 = view_dim / 2.f;
+			m_viewport._42 = view_dim / 2.f;
+
+			// VK DEBUG
+			{
+				static int smap_log = 0;
+				if (smap_log++ < 10) {
+					Msg(" VK DEBUG SMAP o.smapsize=%d, view_dim=%f", o.smapsize, view_dim);
+					xrLogger::FlushLog();
+				}
+			}
+
 			Fmatrix m_viewport_inv;
-			D3DXMatrixInverse((D3DXMATRIX*)&m_viewport_inv, 0, (D3DXMATRIX*)&m_viewport);
+			m_viewport_inv.invert(m_viewport);
+
+			// VK DEBUG
+			{
+				auto check_nan = [](const Fmatrix& M) {
+					for(int i=0; i<4; i++) for(int j=0; j<4; j++) if(!_finite(M.m[i][j])) return true;
+					return false;
+				};
+				if (check_nan(m_viewport)) Msg(" VK DEBUG SMAP m_viewport itself has NaN! ");
+				if (check_nan(m_viewport_inv)) Msg(" VK DEBUG SMAP m_viewport_inv STILL has NaN! ");
+			}
 
 			// snap view-position to pixel
 			cull_xform.mul(mdir_Project, mdir_View);
@@ -268,6 +302,24 @@ void CRender::render_sun_cascade(u32 cascade_ind)
 				Fmatrix adjust;
 				adjust.translate(diff);
 				cull_xform.mulB_44(adjust);
+
+				// --- VK DEBUG NAN TRACKER (MOVED DOWN) ---
+				{
+					auto check_nan = [](const Fmatrix& M) {
+						for(int i=0; i<4; i++) for(int j=0; j<4; j++) if(!_finite(M.m[i][j])) return true;
+						return false;
+					};
+					auto check_nan_vec = [](const Fvector& V) {
+						return !_finite(V.x) || !_finite(V.y) || !_finite(V.z);
+					};
+
+					if (check_nan(m_viewport_inv)) Msg(" VK DEBUG SMAP m_viewport_inv has NaN! ");
+					if (check_nan(cull_xform_inv)) Msg(" VK DEBUG SMAP cull_xform_inv has NaN! ");
+					if (check_nan(adjust)) Msg(" VK DEBUG SMAP adjust has NaN! ");
+					if (check_nan(cull_xform)) Msg(" VK DEBUG SMAP cull_xform (AFTER ADJUST) has NaN! ");
+					xrLogger::FlushLog();
+				}
+				// ------------------------------------------
 			}
 
 			cascade.xform = cull_xform;
@@ -321,14 +373,14 @@ void CRender::render_sun_cascade(u32 cascade_ind)
                 {
                     fuckingsun->X.D.transluent = TRUE;
                     Target->phase_smap_direct_tsh(fuckingsun, SE_SUN_FAR);
-                    cascade.GMCascade.r_dsgraph_render_graph(1);			// normal level, secondary priority
+                    cascade.GMCascade.r_dsgraph_render_graph(1);			// normal level, secondary priority 
                     cascade.GMCascade.r_dsgraph_render_sorted();			// strict-sorted geoms
                 }
             }
         }
 
         // End SMAP-render
-    }	
+    }
 
 	// Accumulate
 	PROF_EVENT("Render Cascade: Accumulate");

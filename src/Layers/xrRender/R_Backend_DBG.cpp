@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #pragma hdrstop
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 extern IC u32 GetIndexCount(D3DPRIMITIVETYPE T, u32 iPrimitiveCount);
 #endif
 
@@ -40,12 +40,9 @@ void CBackend::dbg_Draw(D3DPRIMITIVETYPE T, FVF::L* pVerts, int vcnt, u16* pIdx,
 	{
 		FVF::L* pv = (FVF::L*)Vertex.Lock(vcnt, vs_L->vb_stride, vBase);
 		for (size_t i = 0; i < vcnt; i++)
-		{
 			pv[i] = pVerts[i];
-		}
 		Vertex.Unlock(vcnt, vs_L->vb_stride);
 	}
-
 	u32 iBase;
 	{
 		const u32 count = GetIndexCount(T, pcnt);
@@ -59,14 +56,14 @@ void CBackend::dbg_Draw(D3DPRIMITIVETYPE T, FVF::L* pVerts, int vcnt, u16* pIdx,
 	RImplementation.rmNormal();
 	set_Stencil(FALSE);
 	Render(T, vBase, 0, vcnt, iBase, pcnt);
-#else	//	USE_DX11
+#elif !defined(USE_VK)
 	OnFrameEnd					();
 	CHK_DX(HW.pDevice->SetFVF	(FVF::F_L));
 	CHK_DX(HW.pDevice->DrawIndexedPrimitiveUP(T, 0, vcnt, pcnt,
 		pIdx, D3DFMT_INDEX16,
 		pVerts, sizeof(FVF::L)
 		));
-#endif	//	USE_DX11
+#endif	//	USE_DX10/VK
 }
 void CBackend::dbg_Draw(D3DPRIMITIVETYPE T, FVF::L* pVerts, int pcnt)
 {
@@ -76,22 +73,19 @@ void CBackend::dbg_Draw(D3DPRIMITIVETYPE T, FVF::L* pVerts, int pcnt)
 		const u32 count = GetIndexCount(T, pcnt);
 		FVF::L* pv = (FVF::L*)Vertex.Lock(count, vs_L->vb_stride, vBase);
 		for (size_t i = 0; i < count; i++)
-		{
 			pv[i] = pVerts[i];
-		}
 		Vertex.Unlock(count, vs_L->vb_stride);
 	}
-
 	set_Geometry(vs_L);
 	set_RT(HW.pBaseRT);
 	RImplementation.rmFar();
 	set_Stencil(FALSE);
 	Render(T, vBase, pcnt);
-#else	//	USE_DX11
+#elif !defined(USE_VK)
 	OnFrameEnd();
 	CHK_DX(HW.pDevice->SetFVF(FVF::F_L));
 	CHK_DX(HW.pDevice->DrawPrimitiveUP(T, pcnt, pVerts, sizeof(FVF::L)));
-#endif	//	USE_DX11
+#endif	//	USE_DX10/VK
 }
 
 #define RGBA_GETALPHA(rgb)((rgb) >> 24)

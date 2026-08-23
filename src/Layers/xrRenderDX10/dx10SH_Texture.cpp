@@ -678,8 +678,7 @@ void CTexture::Load()
 	{
 		// Normal texture
 		u32 mem = 0;
-		//pSurface = ::RImplementation.texture_load	(*cName,mem);
-		pSurface = ::RImplementation.texture_load(*cName, mem, true);
+		ID3DBaseTexture* pTexture = ::RImplementation.texture_load(*cName, mem, true);
 
 		if (GetUsage() == D3D_USAGE_STAGING)
 		{
@@ -687,15 +686,22 @@ void CTexture::Load()
 			bCreateView = false;
 		}
 
-		// Calc memory usage and preload into vid-mem
-		if (pSurface)
+#if defined(USE_VK)
+		// VK: surface_set builds m_pSRView from the wrapper's imageView+sampler.
+		// The DX11 CreateShaderResourceView path does not produce a valid VK view.
+		surface_set(pTexture);
+		if (pTexture)
 		{
-			// pSurface->SetPriority	(PRIORITY_NORMAL);
 			flags.MemoryUsage = mem;
+			_RELEASE(pTexture);   // surface_set AddRef'd; release our local ref
 		}
-		
+#else
+		pSurface = pTexture;
+		if (pSurface)
+			flags.MemoryUsage = mem;
 		if (pSurface && bCreateView)
 			CHK_DX(HW.pDevice->CreateShaderResourceView(pSurface, NULL, &m_pSRView));
+#endif
 	}
 	PostLoad();
 	flags.bLoading = false;
@@ -753,6 +759,7 @@ void CTexture::Unload()
 	bind = xr_make_delegate(this, &CTexture::apply_load);
 }
 
+#ifndef USE_VK
 void CTexture::desc_update()
 {
 	while (flags.bLoading)
@@ -771,6 +778,7 @@ void CTexture::desc_update()
 		}
 	}
 }
+#endif
 
 D3D_USAGE CTexture::GetUsage()
 {

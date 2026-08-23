@@ -188,18 +188,21 @@ void CHOM::Render_DB(CFrustum& base)
 {
 	//Update projection matrices on every frame to ensure valid HOM culling
 	float view_dim = occ_dim_0;
-	Fmatrix m_viewport = {
-		view_dim / 2.f, 0.0f, 0.0f, 0.0f,
-		0.0f, -view_dim / 2.f, 0.0f, 0.0f,
-		0.0f, 0.0f, 1.0f, 0.0f,
-		view_dim / 2.f + 0 + 0, view_dim / 2.f + 0 + 0, 0.0f, 1.0f
-	};
-	Fmatrix m_viewport_01 = {
-		1.f / 2.f, 0.0f, 0.0f, 0.0f,
-		0.0f, -1.f / 2.f, 0.0f, 0.0f,
-		0.0f, 0.0f, 1.0f, 0.0f,
-		1.f / 2.f + 0 + 0, 1.f / 2.f + 0 + 0, 0.0f, 1.0f
-	};
+	Fmatrix m_viewport;
+	m_viewport.identity();
+	m_viewport._11 = view_dim / 2.f;
+	m_viewport._22 = -view_dim / 2.f;
+	m_viewport._33 = 1.0f;
+	m_viewport._41 = view_dim / 2.f;
+	m_viewport._42 = view_dim / 2.f;
+
+	Fmatrix m_viewport_01;
+	m_viewport_01.identity();
+	m_viewport_01._11 = 1.f / 2.f;
+	m_viewport_01._22 = -1.f / 2.f;
+	m_viewport_01._33 = 1.0f;
+	m_viewport_01._41 = 1.f / 2.f;
+	m_viewport_01._42 = 1.f / 2.f;
 	m_xform.mul(m_viewport, Device.mFullTransform);
 	m_xform_01.mul(m_viewport_01, Device.mFullTransform);
 

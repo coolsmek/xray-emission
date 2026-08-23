@@ -1,21 +1,31 @@
 #include "stdafx.h"
 #include "dx10ConstantBuffer.h"
 
+#if !defined(USE_VK)
 #include "dx10BufferUtils.h"
+#endif
 #include "../xrRender/dxRenderDeviceRender.h"
+
+#if defined(USE_VK)
+#include "../xrRenderVK/Managers/vk_DescriptorManager.h"
+#endif
 
 dx10ConstantBuffer::~dx10ConstantBuffer()
 {
+#if !defined(USE_VK)
+	// _DeleteConstantBuffer is declared only under USE_DX10||USE_DX11, not USE_VK
 	if (Device.m_pRender && DEV)
 		DEV->_DeleteConstantBuffer(this);
+#endif
 	//	Flush();
 	_RELEASE(m_pBuffer);
 	xr_free(m_pBufferData);
 }
 
 dx10ConstantBuffer::dx10ConstantBuffer(ID3DShaderReflectionConstantBuffer* pTable)
-	: m_bChanged(true)
+	: m_bChanged(true), m_uiBufferSize(0), m_uiMembersCRC(0), m_pBuffer(nullptr), m_pBufferData(nullptr)
 {
+#if !defined(USE_VK)
 	D3D_SHADER_BUFFER_DESC Desc;
 
 	CHK_DX(pTable->GetDesc(&Desc));
@@ -50,7 +60,25 @@ dx10ConstantBuffer::dx10ConstantBuffer(ID3DShaderReflectionConstantBuffer* pTabl
 	VERIFY(m_pBuffer);
 	m_pBufferData = xr_malloc(Desc.Size);
 	VERIFY(m_pBufferData);
+#else
+	// VK: this constructor is never called in production code.
+	// Constant buffers in VK are populated via SPIR-V reflection, not DX10 reflection.
+	(void)pTable;
+#endif
 }
+
+#if defined(USE_VK)
+dx10ConstantBuffer::dx10ConstantBuffer(const char* name, u32 size)
+	: m_bChanged(true), m_uiBufferSize(size), m_uiMembersCRC(0), m_pBuffer(nullptr), m_pBufferData(nullptr)
+{
+	m_strBufferName._set(name);
+	m_eBufferType = 0; // D3D11_CT_CBUFFER equivalent
+
+	m_pBufferData = xr_malloc(size);
+	VERIFY(m_pBufferData);
+	ZeroMemory(m_pBufferData, size);
+}
+#endif
 
 bool dx10ConstantBuffer::Similar(dx10ConstantBuffer& _in)
 {
@@ -83,24 +111,39 @@ bool dx10ConstantBuffer::Similar(dx10ConstantBuffer& _in)
 
 void dx10ConstantBuffer::Flush()
 {
+#if defined(USE_VK)
+    uint32_t ringBufferOffset = 0;
+    void* pRingPtr = DescriptorManager.AllocateDynamicUniform(m_uiBufferSize, ringBufferOffset);
+    if (pRingPtr)
+    {
+        CopyMemory(pRingPtr, m_pBufferData, m_uiBufferSize);
+        m_vkDynamicOffset = ringBufferOffset;
+    }
+    m_bChanged = false;
+    m_vkFlushFrame = Device.dwFrame;
+
+#else
     if (m_bChanged)
     {
+#if defined(USE_DX11)
         void    *pData;
-#ifdef USE_DX11
         D3D11_MAPPED_SUBRESOURCE    pSubRes;
         CHK_DX(HW.pContext->Map(m_pBuffer, 0, D3D_MAP_WRITE_DISCARD, 0, &pSubRes));
         pData = pSubRes.pData;
-#else
-        CHK_DX(m_pBuffer->Map(D3D_MAP_WRITE_DISCARD, 0, &pData));
-#endif
         VERIFY(pData);
         VERIFY(m_pBufferData);
         CopyMemory(pData, m_pBufferData, m_uiBufferSize);
-#ifdef USE_DX11
         HW.pContext->Unmap(m_pBuffer, 0);
-#else
-        m_pBuffer->Unmap();
-#endif
         m_bChanged = false;
+#else
+        void    *pData;
+        CHK_DX(m_pBuffer->Map(D3D_MAP_WRITE_DISCARD, 0, &pData));
+        VERIFY(pData);
+        VERIFY(m_pBufferData);
+        CopyMemory(pData, m_pBufferData, m_uiBufferSize);
+        m_pBuffer->Unmap();
+        m_bChanged = false;
+#endif
     }
+#endif
 }

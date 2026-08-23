@@ -11,6 +11,35 @@
 
 using namespace R_dsgraph;
 
+//experimental
+RenderPacket::RenderPacket(const DSGraphItem<u32, false>& _item, const SPass& pass) : item(_item)
+{
+    // Extract resource pointers from shader pass (previously used as map keys)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
+    pVS = pass.vs ? &*pass.vs : nullptr;
+    pGS = pass.gs ? pass.gs->gs : nullptr;
+#else
+    pVS = pass.vs ? pass.vs->vs : nullptr;
+#endif
+
+    pPS = pass.ps ? pass.ps->ps : nullptr;
+
+#if defined(USE_DX11) || defined(USE_VK)
+    pHS = pass.hs ? pass.hs->sh : nullptr;
+    pDS = pass.ds ? pass.ds->sh : nullptr;
+#endif
+
+    pCS = pass.constants._get();
+    pState = pass.state->state;
+    pTextures = pass.T._get();
+
+    // Pull the geometry buffers off the visual by casting to IRender_Mesh.
+    IRender_Mesh* mesh = dynamic_cast<IRender_Mesh*>(_item.pVisual);
+    SGeometry* g = mesh ? mesh->rm_geom._get() : nullptr;
+    pVB = g ? g->vb : nullptr;
+    pIB = g ? g->ib : nullptr;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Scene graph actual insertion and sorting ////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////

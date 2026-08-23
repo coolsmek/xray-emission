@@ -50,7 +50,7 @@ void CSkeletonX::_Copy(CSkeletonX* B)
 	RMS_boneid = B->RMS_boneid;
 	RMS_bonecount = B->RMS_bonecount;
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	m_Indices = B->m_Indices;
 #endif	//	USE_DX10
 }
@@ -131,6 +131,20 @@ void CSkeletonX::_Render(ref_geom& hGeom, u32 vCount, u32 iOffset, u32 pCount)
 			// Transfer matrices ( current and previous )
 			R_constant* array = RCache.get_c(s_bones_array_const);
 			R_constant* array_prev = RImplementation.phase == RImplementation.PHASE_NORMAL ? RCache.get_c(s_bones_array_prev_const) : array;
+
+#if defined(USE_VK)
+			static u32 s_boneDbg = 0;
+			if (s_boneDbg < 20) {
+			    s_boneDbg++;
+			    if (!array) {
+			        Msg("VK BONES: get_c('sbones_array') == NULL  (bones will be zero!)  count=%u", RMS_bonecount);
+			    } else {
+			        Msg("VK BONES: array OK  vs.index=%u ps.index=%u dest=0x%08x  count=%u",
+			            (u32)array->vs.index, (u32)array->ps.index, array->destination, RMS_bonecount);
+			    }
+			    xrLogger::FlushLog();
+			}
+#endif
 
 			{
 				PROF_EVENT("SEND_MATRICES");
@@ -753,7 +767,7 @@ void CSkeletonX::_FillVerticesSoft4W(const Fmatrix& view, CSkeletonWallmark& wm,
 	}
 }
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 void CSkeletonX::_DuplicateIndices(const char* N, IReader* data)
 {
 	//	We will have trouble with container since don't know were to take readable indices

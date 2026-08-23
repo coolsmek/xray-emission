@@ -95,7 +95,7 @@ void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOO
 	}
 
 	// Uber-construct
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 #	ifdef USE_DX11
 	if (bump && hq && RImplementation.o.dx11_enable_tessellation && C.TessMethod != 0)
 	{
@@ -336,4 +336,15 @@ void uber_shadow(CBlender_Compile& C, LPCSTR _vspec)
 	else
 		C.r_Pass("shadow_direct_base", "dumb", FALSE,TRUE,TRUE,FALSE);
 }
-#endif
+#endif // USE_DX11
+
+#if defined(USE_VK)
+// VK stub — tessellated shadow pass not yet implemented.
+// The blender compiler calls this for bump-shadow draw elements.
+// Return silently so the shader element is created without a tess pass.
+void uber_shadow(CBlender_Compile& C, LPCSTR _vspec)
+{
+    // Fallback: non-tessellated shadow pass, same as the DX9/R2 path.
+    C.r_Pass("shadow_direct_base", "dumb", FALSE, TRUE, TRUE, FALSE);
+}
+#endif // USE_VK

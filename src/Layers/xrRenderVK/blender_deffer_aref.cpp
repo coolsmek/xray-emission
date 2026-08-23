@@ -105,9 +105,18 @@ void CBlender_deffer_aref::Compile(CBlender_Compile& C)
 			}
 
 
-			uber_deffer(C, true, "base", "base", true, 0, true);
-			C.r_Stencil(TRUE, D3DCMP_ALWAYS, 0xff, 0x7f, D3DSTENCILOP_KEEP, D3DSTENCILOP_REPLACE, D3DSTENCILOP_KEEP);
-			C.r_StencilRef(0x01);
+			if (C.HudElement)
+			{
+				uber_deffer(C, true, "base", "base", true, 0, true);
+				C.r_Stencil(TRUE, D3DCMP_ALWAYS, 0xff, 0xff, D3DSTENCILOP_KEEP, D3DSTENCILOP_REPLACE, D3DSTENCILOP_KEEP);
+				C.r_StencilRef(0x81);
+			}
+			else
+			{
+				uber_deffer(C, true, "base", "base", true, 0, true);
+				C.r_Stencil(TRUE, D3DCMP_ALWAYS, 0xff, 0x7f, D3DSTENCILOP_KEEP, D3DSTENCILOP_REPLACE, D3DSTENCILOP_KEEP);
+				C.r_StencilRef(0x01);
+			}
 			if (bUseATOC) C.RS.SetRS(D3DRS_ZFUNC, D3DCMP_EQUAL);
 			C.r_End();
 			break;
@@ -128,9 +137,18 @@ void CBlender_deffer_aref::Compile(CBlender_Compile& C)
 			}
 
 
-			uber_deffer(C, false, "base", "base", true, 0, true);
-			C.r_Stencil(TRUE, D3DCMP_ALWAYS, 0xff, 0x7f, D3DSTENCILOP_KEEP, D3DSTENCILOP_REPLACE, D3DSTENCILOP_KEEP);
-			C.r_StencilRef(0x01);
+			if (C.HudElement)
+			{
+				uber_deffer(C, false, "base", "base", true, 0, true);
+				C.r_Stencil(TRUE, D3DCMP_ALWAYS, 0xff, 0xff, D3DSTENCILOP_KEEP, D3DSTENCILOP_REPLACE, D3DSTENCILOP_KEEP);
+				C.r_StencilRef(0x81);
+			}
+			else
+			{
+				uber_deffer(C, false, "base", "base", true, 0, true);
+				C.r_Stencil(TRUE, D3DCMP_ALWAYS, 0xff, 0x7f, D3DSTENCILOP_KEEP, D3DSTENCILOP_REPLACE, D3DSTENCILOP_KEEP);
+				C.r_StencilRef(0x01);
+			}
 			if (bUseATOC) C.RS.SetRS(D3DRS_ZFUNC, D3DCMP_EQUAL);
 			C.r_End();
 			break;

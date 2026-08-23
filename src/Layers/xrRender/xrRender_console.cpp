@@ -618,6 +618,8 @@ public:
 		clamp(val, 1, 16);
 #if defined(USE_DX10) || defined(USE_DX11)
 		SSManager.SetMaxAnisotropy(val);
+#elif defined(USE_VK)
+		// TODO: VK: SetMaxAnisotropy
 #else	//	USE_DX10
 		for (u32 i = 0; i < HW.Caps.raster.dwStages; i++)
 			CHK_DX(HW.pDevice->SetSamplerState( i, D3DSAMP_MAXANISOTROPY, val ));
@@ -653,6 +655,8 @@ public:
 		//VERIFY(!"apply not implmemented.");
 		//Done. Thanks for reminding me.
 		SSManager.SetMipLODBias(*value);
+#elif defined(USE_VK)
+        // Vulkan stub
 #else	//	USE_DX10
 		for (u32 i = 0; i < HW.Caps.raster.dwStages; i++)
 			CHK_DX(HW.pDevice->SetSamplerState( i, D3DSAMP_MIPMAPLODBIAS, *((LPDWORD) value)));

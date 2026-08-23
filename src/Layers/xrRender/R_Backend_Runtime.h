@@ -12,6 +12,7 @@
 #include "../xrRenderDX10/StateManager/dx10State.h"
 #elif defined(USE_VK)
 // Vulkan has no legacy state machine — runtime state is managed via pipeline objects
+#include "../xrRenderVK/Backend/vkR_Backend_Runtime.h"
 #else	//	USE_DX10
 #include "../xrRenderDX9/dx9R_Backend_Runtime.h"
 #endif	//	USE_DX10
@@ -88,34 +89,34 @@ IC void R_xforms::set_c_wvp_prev(R_constant* C)
 	RCache.set_c(C, m_wvp_prev);
 };
 
-IC void CBackend::set_xform_world(const Fmatrix& M)
+IC void CBackend::set_xform_world(const Fmatrix& _M)
 {
-	xforms.set_W(M);
+	xforms.set_W(_M);
 }
 
-IC void CBackend::set_xform_view(const Fmatrix& M)
+IC void CBackend::set_xform_view(const Fmatrix& _M)
 {
-	xforms.set_V(M);
+	xforms.set_V(_M);
 }
 
-IC void CBackend::set_xform_project(const Fmatrix& M)
+IC void CBackend::set_xform_project(const Fmatrix& _M)
 {
-	xforms.set_P(M);
+	xforms.set_P(_M);
 }
 
-IC void CBackend::set_xform_world_prev(const Fmatrix& M)
+IC void CBackend::set_xform_world_prev(const Fmatrix& _M)
 {
-	xforms.set_W_prev(M);
+	xforms.set_W_prev(_M);
 }
 
-IC void CBackend::set_xform_view_prev(const Fmatrix& M)
+IC void CBackend::set_xform_view_prev(const Fmatrix& _M)
 {
-	xforms.set_V_prev(M);
+	xforms.set_V_prev(_M);
 }
 
-IC void CBackend::set_xform_project_prev(const Fmatrix& M)
+IC void CBackend::set_xform_project_prev(const Fmatrix& _M)
 {
-	xforms.set_P_prev(M);
+	xforms.set_P_prev(_M);
 }
 
 IC const Fmatrix& CBackend::get_xform_world() { return xforms.get_W(); }

@@ -33,6 +33,8 @@ void CBlender_combine::Compile(CBlender_Compile& C)
 		//C.r_Sampler_clf		("sky_s1",			r2_T_sky1			);
 
 		C.r_dx10Texture("s_position", r2_RT_P);
+		// NOTE: r3 G-Buffer has NO separate normal RT — normals are packed into s_position.xy
+		// s_diffuse in the shader maps to r2_RT_albedo (albedo+gloss = G-Buffer slot 1)
 		C.r_dx10Texture("s_diffuse", r2_RT_albedo);
 		C.r_dx10Texture("s_accumulator", r2_RT_accum);
 		C.r_dx10Texture("s_depth", r2_RT_depth);
@@ -231,6 +233,7 @@ void CBlender_combine_msaa::Compile(CBlender_Compile& C)
 		//C.r_Sampler_clf		("sky_s1",			r2_T_sky1			);
 
 		C.r_dx10Texture("s_position", r2_RT_P);
+		// NOTE: r3 G-Buffer has NO separate normal RT — normals are packed into s_position.xy
 		C.r_dx10Texture("s_diffuse", r2_RT_albedo);
 		C.r_dx10Texture("s_accumulator", r2_RT_accum);
 		C.r_dx10Texture("s_depth", r2_RT_depth);

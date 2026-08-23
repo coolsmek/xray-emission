@@ -2,6 +2,7 @@
 #include "MainMenu.h"
 #include "UI/UIDialogWnd.h"
 #include "ui/UIMessageBoxEx.h"
+#include "ui/UIStatic.h"
 #include "../xrEngine/xr_IOConsole.h"
 #include "../xrEngine/IGame_Level.h"
 #include "../xrEngine/CameraManager.h"
@@ -306,6 +307,19 @@ bool CMainMenu::ReloadUI()
 	xr_delete(m_startDialog);
 	m_startDialog = smart_cast<CUIDialogWnd*>(dlg);
 	VERIFY(m_startDialog);
+	if (xr_strcmp(Console->GetString("renderer"), "renderer_vk") == 0)
+	{
+		CUIStatic* vk_logo = xr_new<CUIStatic>();
+		vk_logo->SetWindowName("vk_logo");
+		vk_logo->SetAutoDelete(true);
+		vk_logo->SetWndPos(Fvector2().set(900.0f, 685.0f));
+		vk_logo->SetWndSize(Fvector2().set(80.0f, 60.0f));
+		vk_logo->InitTexture("ui\\vulkan_logo");
+		vk_logo->SetStretchTexture(true);
+		vk_logo->Enable(false);
+		m_startDialog->AttachChild(vk_logo);
+	}
+
 	m_startDialog->m_bWorkInPause = true;
 	m_startDialog->ShowDialog(true);
 

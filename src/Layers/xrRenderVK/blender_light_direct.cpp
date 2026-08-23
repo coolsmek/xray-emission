@@ -53,6 +53,31 @@ void CBlender_accum_direct::Compile(CBlender_Compile& C)
 
 		C.r_End();
 		break;
+	case SE_SUN_NEAR_HUD: // HUD dedicated near pass - uses accum_sun_hud_vk
+		C.r_Pass("accum_sun", "accum_sun_hud_vk", false, TRUE, FALSE, blend, D3DBLEND_ONE, dest);
+
+		C.r_CullMode(D3DCULL_NONE);
+		C.PassSET_ZB(TRUE, FALSE, TRUE); // force inverted Z-Buffer
+
+		C.r_dx10Texture("s_position", r2_RT_P);
+		C.r_dx10Texture("s_diffuse", r2_RT_albedo);
+
+		C.r_dx10Texture("s_material", r2_material);
+		C.r_dx10Texture("s_accumulator", r2_RT_accum);
+		C.r_dx10Texture("s_lmap", r2_sunmask);
+		C.r_dx10Texture("s_smap", r2_RT_smap_depth);
+		C.r_dx10Texture("s_smap_minmax", r2_RT_smap_depth_minmax);
+
+		C.r_dx10Texture("s_ssfx_sss", r2_RT_ssfx_sss);
+
+		C.r_dx10Sampler("smp_nofilter");
+		C.r_dx10Sampler("smp_material");
+		C.r_dx10Sampler("smp_linear");
+		jitter(C);
+		C.r_dx10Sampler("smp_smap");
+
+		C.r_End();
+		break;
 	case SE_SUN_FAR: // far pass, only stencil clipping performed
 		//	FVF::TL2uv
 		//C.r_Pass			("null",			"accum_sun_far",	false,	TRUE,	FALSE,blend,D3DBLEND_ONE,dest);

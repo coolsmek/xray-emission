@@ -11,7 +11,7 @@ class CGIFAnimationPlayer;
 class ECORE_API CTexture : public xr_resource_named
 {
 public:
-	//	Since DX10 allows up to 128 unique textures, 
+	//	Since DX10 allows up to 128 unique textures,
 	//	distance between enum values should be at leas 128
 	enum ResourceShaderType //	Don't change this since it's hardware-dependent
 	{
@@ -64,7 +64,7 @@ public:
 	CTexture();
 	virtual ~CTexture();
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	ID3DShaderResourceView*				get_SRView() {return m_pSRView;}
 #endif	//	USE_DX10
 
@@ -73,7 +73,7 @@ private:
 	IC BOOL desc_valid() { wait_for_loading(); return pSurface==desc_cache; }
 	IC void desc_enshure() { wait_for_loading(); if (!desc_valid()) desc_update(); }
 	void desc_update();
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	void								Apply			(u32 dwStage);
 	void								ProcessStaging();
 	D3D_USAGE							GetUsage();
@@ -88,8 +88,8 @@ public: //	Public class members (must be encapsulated furthur)
 		u32 bUser : 1;
 		u32 seqCycles : 1;
 		u32 MemoryUsage : 27;
-#if defined(USE_DX10) || defined(USE_DX11)
-		u32					bLoadedAsStaging: 1;
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
+	u32					bLoadedAsStaging: 1;
 #endif	//	USE_DX10
 	} flags;
 
@@ -123,7 +123,7 @@ private:
 
     CGIFAnimationPlayer* gifPlayer;
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	ID3DShaderResourceView*			m_pSRView;
 	// Sequence view data
 	xr_vector<ID3DShaderResourceView*>m_seqSRView;

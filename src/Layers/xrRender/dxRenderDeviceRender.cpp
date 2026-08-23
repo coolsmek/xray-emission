@@ -77,6 +77,9 @@ void dxRenderDeviceRender::Reset(HWND hWnd, u32& dwWidth, u32& dwHeight, float& 
 #elif defined(USE_DX10)
 	dwWidth = HW.m_ChainDesc.BufferDesc.Width;
 	dwHeight = HW.m_ChainDesc.BufferDesc.Height;
+#elif defined(USE_VK)
+	dwWidth = HW.m_vkSCExtent.width;
+	dwHeight = HW.m_vkSCExtent.height;
 #else	//	USE_DX10
 	if (noTexturesInRAM)
 		ResourcesDeferredUpload();

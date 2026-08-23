@@ -23,6 +23,11 @@ extern float r_ssaDONTSORT;
 extern float r_ssaHZBvsTEX;
 extern float r_ssaGLOD_start, r_ssaGLOD_end;
 
+#if defined(USE_VK)
+u64 g_tDSGraph = 0;
+u64 g_tState = 0, g_tTex = 0, g_tLOD = 0, g_tVis = 0;
+#endif
+
 ICF float calcLOD(float ssa/*fDistSq*/, float R)
 {
 	return _sqrt(clampr((ssa - r_ssaGLOD_end) / (r_ssaGLOD_start - r_ssaGLOD_end), 0.f, 1.f));
@@ -31,8 +36,26 @@ ICF float calcLOD(float ssa/*fDistSq*/, float R)
 template<typename T, bool Reverse>
 void CDSGraphManager::r_dsgraph_render_graph_sorted(R_dsgraph::mapDSGraphItems<T, Reverse>& graph, bool _clear)
 {
-    if (graph.empty())
+#if defined(USE_VK)
+    const bool dp = !!strstr(Core.Params, "-vk_draw_perf");
+    u64 t_start = dp ? CPU::GetCLK() : 0;
+#endif
+
+    if (graph.empty()) {
+#if defined(USE_VK)
+        if (dp) g_tDSGraph += CPU::GetCLK() - t_start;
+#endif
         return;
+    }
+
+    if (RImplementation.phase == CRender::PHASE_SMAP && strstr(Core.Params, "-skip_cs_geo"))
+    {
+        if (_clear) graph.clear();
+#if defined(USE_VK)
+        if (dp) g_tDSGraph += CPU::GetCLK() - t_start;
+#endif
+        return;
+    }
 
     std::sort(graph.begin(), graph.end());
 
@@ -55,11 +78,22 @@ void CDSGraphManager::r_dsgraph_render_graph_sorted(R_dsgraph::mapDSGraphItems<T
 		graph.clear();
 
 	RCache.set_xform_world(Fidentity);
+
+#if defined(USE_VK)
+    if (dp) g_tDSGraph += CPU::GetCLK() - t_start;
+#endif
 }
 
 void CDSGraphManager::r_dsgraph_render_graph(RenderQueueArray& queues, u32 _priority, bool _clear, bool static_geometry)
 {
+#if defined(USE_VK)
+    const bool dp = !!strstr(Core.Params, "-vk_draw_perf");
+    u64 t_start = dp ? CPU::GetCLK() : 0;
+#endif
+
 	RCache.set_xform_world(Fidentity);
+
+    bool bSkipDraw = (RImplementation.phase == CRender::PHASE_SMAP && strstr(Core.Params, "-skip_cs_geo"));
 
 	for (u32 iPass = 0; iPass < SHADER_PASSES_MAX; ++iPass)
 	{
@@ -67,7 +101,13 @@ void CDSGraphManager::r_dsgraph_render_graph(RenderQueueArray& queues, u32 _prio
 		if (queue.empty())
 			continue;
 
-		// 1. Sort by generated sort key to replicate previous fixed map behaviour
+        if (bSkipDraw)
+        {
+            if (_clear) queue.clear();
+            continue;
+        }
+
+		// 1. Sort by generated sort key to group by state, textures, and geometry
 		if (queue.size() < 4096)
             std::sort(queue.begin(), queue.end());
 		else
@@ -76,13 +116,13 @@ void CDSGraphManager::r_dsgraph_render_graph(RenderQueueArray& queues, u32 _prio
 		// 2. Render
 		vs_type pVS = nullptr;
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 		gs_type pGS = nullptr;
 #endif
 
 		ps_type pPS = nullptr;
 
-#ifdef USE_DX11
+#if defined(USE_DX11) || defined(USE_VK)
 		hs_type pHS = nullptr;
 		ds_type pDS = nullptr;
 #endif
@@ -91,44 +131,39 @@ void CDSGraphManager::r_dsgraph_render_graph(RenderQueueArray& queues, u32 _prio
 		ID3DState* pState = nullptr;
 		STextureList* pTextures = nullptr;
 
-        u64 high = 0;
-
         for (auto& packet : queue)
         {
-            auto& currentKey = packet.sortKey;
-            if (currentKey.high != high)
+#if defined(USE_VK)
+            u64 pa = dp ? CPU::GetCLK() : 0;
+#endif
+
+            if (packet.pState != pState)
             {
-                high = currentKey.high;
-
-                if (packet.pState != pState)
-                {
-                    pState = packet.pState;
-                    RCache.set_States(pState);
-                }
-
-#if defined(USE_DX10) || defined(USE_DX11)
-                if (packet.pGS != pGS)
-                {
-                    pGS = packet.pGS;
-                    RCache.set_GS(pGS);
-                }
-#endif
-
-#ifdef USE_DX11
-                if (packet.pHS != pHS)
-                {
-                    pHS = packet.pHS;
-                    RCache.set_HS(pHS);
-                }
-                if (packet.pDS != pDS)
-                {
-                    pDS = packet.pDS;
-                    RCache.set_DS(pDS);
-                }
-#endif
+                pState = packet.pState;
+                RCache.set_States(pState);
             }
 
-            // Compare low key stuff regardless, too high collision probability
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
+            if (packet.pGS != pGS)
+            {
+                pGS = packet.pGS;
+                RCache.set_GS(pGS);
+            }
+#endif
+
+#if defined(USE_DX11) || defined(USE_VK)
+            if (packet.pHS != pHS)
+            {
+                pHS = packet.pHS;
+                RCache.set_HS(pHS);
+            }
+            if (packet.pDS != pDS)
+            {
+                pDS = packet.pDS;
+                RCache.set_DS(pDS);
+            }
+#endif
+
             if (packet.pVS != pVS)
             {
                 pVS = packet.pVS;
@@ -147,12 +182,20 @@ void CDSGraphManager::r_dsgraph_render_graph(RenderQueueArray& queues, u32 _prio
                 RCache.set_Constants(pCS);
             }
 
+#if defined(USE_VK)
+            u64 pb = dp ? CPU::GetCLK() : 0; if (dp) g_tState += pb - pa;
+#endif
+
             if (packet.pTextures != pTextures)
             {
                 pTextures = packet.pTextures;
                 RCache.set_Textures(pTextures);
                 RImplementation.apply_lmaterial();
             }
+
+#if defined(USE_VK)
+            u64 pc = dp ? CPU::GetCLK() : 0; if (dp) g_tTex += pc - pb;
+#endif
 
 			auto& item = packet.item;
 			if (!static_geometry)
@@ -166,12 +209,25 @@ void CDSGraphManager::r_dsgraph_render_graph(RenderQueueArray& queues, u32 _prio
 #ifdef USE_DX11
 			RCache.LOD.set_LOD(LOD);
 #endif
+
+#if defined(USE_VK)
+            u64 pd = dp ? CPU::GetCLK() : 0; if (dp) g_tLOD += pd - pc;
+#endif
+
 			item.pVisual->Render(LOD);
+
+#if defined(USE_VK)
+            u64 pe = dp ? CPU::GetCLK() : 0; if (dp) g_tVis += pe - pd;
+#endif
 		}
 
 		if (_clear)
 			queue.clear();
 	}
+
+#if defined(USE_VK)
+    if (dp) g_tDSGraph += CPU::GetCLK() - t_start;
+#endif
 }
 
 //////////////////////////////////////////////////////////////////////////

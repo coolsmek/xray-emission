@@ -26,7 +26,13 @@ class IConsoleRender;
 class IUIShader;
 class IUISequenceVideoItem;
 
-/*
+// Original commented-out interface kept for reference.
+// Under USE_VK the interface is defined below via the #if defined(USE_VK) block.
+#if defined(USE_VK)
+// ---------------------------------------------------------------------------
+// IRenderFactory — abstract interface required by the Vulkan renderer.
+// DX builds never need this (dxRenderFactory is a standalone concrete class).
+// ---------------------------------------------------------------------------
 #define RENDER_FACTORY_INTERFACE(Class) \
 virtual I##Class* Create##Class() = 0; \
 virtual void Destroy##Class(I##Class *pObject) = 0;
@@ -35,6 +41,7 @@ virtual void Destroy##Class(I##Class *pObject) = 0;
 class IRenderFactory
 {
 public:
+    virtual ~IRenderFactory() = default;
 #ifndef _EDITOR
 	// virtual IStatsRender* CreateStatsRender() = 0;
 	// virtual void DestroyStatsRender(IStatsRender *pObject) = 0;
@@ -63,10 +70,12 @@ public:
 	RENDER_FACTORY_INTERFACE(FlareRender)
 #endif // _EDITOR
 	RENDER_FACTORY_INTERFACE(FontRender)
+	RENDER_FACTORY_INTERFACE(ImGuiRender)
 protected:
 	//virtual IEnvDescriptorRender *CreateEnvDescriptorRender() = 0;
 	//virtual void DestroyEnvDescriptorRender(IEnvDescriptorRender *pObject) = 0;
 };
-*/
+#undef RENDER_FACTORY_INTERFACE
+#endif // USE_VK
 
 #endif	//	RenderFactory_included

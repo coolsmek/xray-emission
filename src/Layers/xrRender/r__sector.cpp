@@ -227,12 +227,12 @@ void CSector::traverse(CFrustum &&F, CDSGraphManager& DM)
 		DM.D.clear();
 		sPoly* P = F.ClipPoly(DM.S, DM.D);
 
-		if (0 == P)
-		{
-			if (dbg)
-				++dbg->portals_rejected_clip;
-			continue;
-		}
+        if (0 == P)
+        {
+            if (dbg)
+                ++dbg->portals_rejected_clip;
+            continue;
+        }
 
 		// Cull by HOM (slower algo)
 		if ((DM.i_options & CDSGraphManager::VQ_HOM) && !RImplementation.HOM.visible(*P))

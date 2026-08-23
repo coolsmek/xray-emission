@@ -64,6 +64,7 @@ extern Fvector4 ps_ssfx_grass_interactive;
 std::chrono::high_resolution_clock::time_point tlastf = std::chrono::high_resolution_clock::now(), tcurrentf = std::
 	                                               chrono::high_resolution_clock::now();
 std::chrono::duration<float> time_span;
+bool g_seqframe_perf = false;
 ENGINE_API float refresh_rate = 0;
 #endif // ECO_RENDER
 
@@ -292,12 +293,24 @@ void GetMonitorPosition(int& x, int& y)
 
 float GetMonitorRefresh()
 {
-	DEVMODE lpDevMode;
-	memset(&lpDevMode, 0, sizeof(DEVMODE));
-	lpDevMode.dmSize = sizeof(DEVMODE);
+	DEVMODEA lpDevMode;
+	memset(&lpDevMode, 0, sizeof(DEVMODEA));
+	lpDevMode.dmSize = sizeof(DEVMODEA);
 	lpDevMode.dmDriverExtra = 0;
 
-	if (EnumDisplaySettings(NULL, ENUM_CURRENT_SETTINGS, &lpDevMode) == 0)
+	LPCSTR deviceName = NULL;
+	if (Device.m_hWnd)
+	{
+		HMONITOR hMonitor = MonitorFromWindow(Device.m_hWnd, MONITOR_DEFAULTTOPRIMARY);
+		MONITORINFOEXA mi;
+		mi.cbSize = sizeof(MONITORINFOEXA);
+		if (GetMonitorInfoA(hMonitor, (LPMONITORINFO)&mi))
+		{
+			deviceName = mi.szDevice;
+		}
+	}
+
+	if (EnumDisplaySettingsA(deviceName, ENUM_CURRENT_SETTINGS, &lpDevMode) == 0)
 	{
 		return 1.f / 60.f;
 	}
@@ -338,6 +351,10 @@ void mt_FreezeThread(void *ptr) {
 
 void CRenderDevice::on_idle()
 {
+	static CTimer s_iter; static bool s_first = true;
+	if (!s_first && strstr(Core.Params, "-vk_loop_perf"))
+		Msg("  VK-ITER  whole=%.3f ms", s_iter.GetElapsed_sec()*1000.f);
+	s_iter.Start(); s_first = false;
 
 	FreezeTimer.Start();
 
@@ -427,7 +444,7 @@ void CRenderDevice::on_idle()
 	mProjectCam_prev = mProjectCam;
 	mFullTransformCam_prev = mFullTransformCam;
 
-	// Previous frame data -- 
+	// Previous frame data --
 	mView_prev = mView_saved;
 	mProject_prev = mProject_saved;
 	mFullTransform_prev = mFullTransform_saved; // Unused?
@@ -436,7 +453,7 @@ void CRenderDevice::on_idle()
 
 	mProjectHud.build_projection(deg2rad(psHUD_FOV * 83.f), fASPECT, R_VIEWPORT_NEAR, g_pGamePersistent->Environment().CurrentEnv->far_plane);
 	mProjectCam.build_projection(deg2rad(83.f), fASPECT, R_VIEWPORT_NEAR, g_pGamePersistent->Environment().CurrentEnv->far_plane);
-	
+
 	mViewHud.set(mView);
 	mViewCam.set(mView);
 	mFullTransformHud.mul(mProjectHud, mViewHud);
@@ -481,14 +498,18 @@ void CRenderDevice::on_idle()
 	Device.LuaGCCount = 0;
 
 	secondary_tasks.run(&XRay::Engine::GameThread);
-	
+
 #ifdef ECO_RENDER // ECO_RENDER START
 	if (Device.Paused() || IsMainMenuActive() || ps_framelimiter)
 	{
 		PROF_EVENT("Eco Render");
 
 		if (refresh_rate == 0)
+		{
 			refresh_rate = GetMonitorRefresh();
+			Msg("  [ECO] refresh_rate period=%.5f s -> %.1f Hz (framelimiter=%d)",
+				refresh_rate, refresh_rate > 0 ? 1.f/refresh_rate : 0.f, ps_framelimiter);
+		}
 
 		float rr;
 
@@ -507,14 +528,21 @@ void CRenderDevice::on_idle()
 	}
 #endif // ECO_RENDER END
 
+	const bool perf2 = !!strstr(Core.Params, "-vk_frame_perf2");
+	CTimer tSeg;
+	float msSeqRender = 0.f, msBeginEnd = 0.f;
+
 #ifndef DEDICATED_SERVER
+	if (perf2) tSeg.Start();
 	Statistic->RenderTOTAL_Real.FrameStart();
 	Statistic->RenderTOTAL_Real.Begin();
 
 	if (b_is_Active && Begin())
 	{
 		START_PROFILE("Process seqRender");
+		CTimer tSR; if (perf2) tSR.Start();
 		seqRender.Process(rp_Render);
+		if (perf2) msSeqRender = tSR.GetElapsed_sec()*1000.f;
 		STOP_PROFILE;
 
 		if (psDeviceFlags.test(rsCameraPos) || psDeviceFlags.test(rsStatistic) || Statistic->errors.size())
@@ -525,13 +553,21 @@ void CRenderDevice::on_idle()
 
 		End();
 	}
+	if (perf2) msBeginEnd = tSeg.GetElapsed_sec()*1000.f;
+
 	Statistic->RenderTOTAL_Real.End();
 	Statistic->RenderTOTAL_Real.FrameEnd();
 	Statistic->RenderTOTAL.accum = Statistic->RenderTOTAL_Real.accum;
-#endif 
+#endif
 	Device.isRendering = false;
 
+	CTimer tWait; if (perf2) tWait.Start();
 	secondary_tasks.wait();
+	const float msWait = perf2 ? tWait.GetElapsed_sec()*1000.f : 0.f;
+
+	if (perf2)
+		Msg("  VK-FRAME2  f%u seqRender=%.3f beginEndTotal=%.3f secWait=%.3f",
+			Device.dwFrame, msSeqRender, msBeginEnd, msWait);
 
 	if (psLua_ParallelGC_debug && psLua_ParallelGC && Device.LuaGCDebug)
 	{
@@ -701,12 +737,21 @@ void CRenderDevice::FrameMove()
 	// Frame move
 	Statistic->EngineTOTAL.Begin();
 
+	const bool fperf = !!strstr(Core.Params, "-vk_seqframe_perf");
+	CTimer tSF; if (fperf) tSF.Start();
+
+    g_seqframe_perf = !!strstr(Core.Params, "-vk_cb_perf");
+
 	START_PROFILE("Process seqFrame");
 	Device.seqFrame.Process(rp_Frame);
 	STOP_PROFILE;
-	
+
+	if (fperf)
+		Msg("  VK-SEQFRAME  f%u seqFrame=%.3f ms", Device.dwFrame,
+			tSF.GetElapsed_sec()*1000.f);
+
 	g_bLoaded = TRUE;
-	
+
 	Statistic->EngineTOTAL.End();
 }
 

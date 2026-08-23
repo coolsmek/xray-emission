@@ -13,6 +13,8 @@
 #elif defined(USE_VK)
 #define VK_USE_PLATFORM_WIN32_KHR
 #include <vulkan/vulkan.h>
+#include <mutex>
+#include <functional>
 #endif
 
 #include "hwcaps.h"
@@ -39,6 +41,10 @@ public:
 	void DestroyD3D();
 	void CreateDevice(HWND hw, bool move_window);
 
+	// Tool-mode boot: creates Vulkan instance/device WITHOUT swapchain/framebuffers/sync.
+	// Spherical owns the swapchain; xrRenderVK renders to an offscreen rt_Color target.
+	void CreateDevice_NoSwapchain(HWND hw, bool move_window, u32 width = 1280, u32 height = 720);
+
 	void DestroyDevice();
 
 	void Reset(HWND hw);
@@ -56,7 +62,7 @@ public:
 	BOOL support(D3DFORMAT fmt, DWORD type, DWORD usage);
 
 #ifdef DEBUG
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	void	Validate(void)	{};
 #else	//	USE_DX10
 	void	Validate(void)	{	VERIFY(pDevice); VERIFY(pD3D); };
@@ -113,6 +119,7 @@ public:
 public:
     // ── Core Vulkan objects ───────────────────────────────────────────────────
     VkInstance              m_vkInstance            = VK_NULL_HANDLE;
+    VkDebugUtilsMessengerEXT m_vkDebugMessenger     = VK_NULL_HANDLE;
     VkPhysicalDevice        m_vkPhysDevice          = VK_NULL_HANDLE;
     VkDevice                m_vkDevice              = VK_NULL_HANDLE;
     VkSurfaceKHR            m_vkSurface             = VK_NULL_HANDLE;
@@ -133,6 +140,7 @@ public:
     xr_vector<VkImageView>  m_vkSCImageViews;
     uint32_t                m_vkSCImageCount        = 0;
     uint32_t                m_vkCurrentFrame        = 0;  // index into per-frame resources
+    uint32_t                m_vkCurrentImageIndex   = 0;  // index of the acquired swapchain image
 
     // ── Depth buffer ──────────────────────────────────────────────────────────
     VkImage                 m_vkDepthImage          = VK_NULL_HANDLE;
@@ -151,8 +159,35 @@ public:
     // ── Synchronisation (double-buffered) ─────────────────────────────────────
     static constexpr uint32_t MAX_FRAMES_IN_FLIGHT  = 2;
     VkSemaphore             m_vkImageAvailable[MAX_FRAMES_IN_FLIGHT] {};
-    VkSemaphore             m_vkRenderFinished[MAX_FRAMES_IN_FLIGHT] {};
+    xr_vector<VkSemaphore>  m_vkRenderFinished;
     VkFence                 m_vkInFlightFences[MAX_FRAMES_IN_FLIGHT] {};
+    bool                    m_bRenderingFrame = false; // Set to true if Begin() successfully acquires a frame
+    bool                    m_bToolMode       = false; // Set by CreateDevice_NoSwapchain; gates Begin/End
+    VkCommandBuffer         m_vkToolCmd       = VK_NULL_HANDLE; // Active cmd in tool mode (set by XrRenderVK_RenderSceneTool)
+
+    // Thread-safety for queue submission (background loading vs main thread)
+    std::mutex              m_QueueLock;
+    VkResult                SubmitQueue(uint32_t submitCount, const VkSubmitInfo* pSubmits, VkFence fence);
+    VkResult                SubmitQueueAndWait(uint32_t submitCount, const VkSubmitInfo* pSubmits);
+    VkResult                PresentQueue(const VkPresentInfoKHR* pPresentInfo);
+    VkResult                WaitQueueIdle();
+
+    // ── Deferred Transfers ────────────────────────────────────────────────────
+    struct DeferredTransfer {
+        std::function<void(VkCommandBuffer)> recordCmds;
+        std::function<void()> cleanup;
+    };
+    std::mutex                      m_TransferMutex;
+    std::mutex                      m_TransferPoolMutex;
+    xr_vector<DeferredTransfer>     m_pendingTransfers;
+    VkCommandPool                   m_vkTransferPool = VK_NULL_HANDLE;
+
+    void                            QueueTransfer(std::function<void(VkCommandBuffer)> recordCmds, std::function<void()> cleanup);
+    void                            FlushDeferredTransfers();
+    bool                            HasPendingTransfers() {
+                                        std::lock_guard<std::mutex> lock(m_TransferMutex);
+                                        return !m_pendingTransfers.empty();
+                                    }
 
     // ── Pipeline cache (shared across all PSO compilations) ───────────────────
     VkPipelineCache         m_vkPipelineCache       = VK_NULL_HANDLE;
@@ -162,7 +197,9 @@ public:
     VkPhysicalDeviceFeatures            m_vkDevFeatures {};
     VkPhysicalDeviceMemoryProperties    m_vkMemProps    {};
 
-    // ── Engine integration ────────────────────────────────────────────────────
+    ID3DDevice              pDevice                 = nullptr;
+
+    // ── Instance & Physical Device ────────────────────────────────────────────────────
     CHWCaps                 Caps;
     HWND                    m_hWnd                  = nullptr;
     bool                    m_SupportsVRR           = false;    // VK_EXT_present_id / FIFO relaxed
@@ -236,6 +273,7 @@ private:
 	VkPresentModeKHR vk_SelectPresentMode() const;
 	VkExtent2D		vk_SelectSwapExtent(const VkSurfaceCapabilitiesKHR& caps) const;
 #endif	//	USE_VK
+public:
 	bool m_move_window;
 };
 

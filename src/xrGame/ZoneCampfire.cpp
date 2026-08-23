@@ -56,6 +56,13 @@ void CZoneCampfire::GoDisabledState()
 {
 	inherited::GoDisabledState();
 
+	// Immediately stop the idle fire (particles + light). The gradual turn-off
+	// ramp in UpdateWorkload() only runs while the zone is NOT enabled
+	// (shedule_Update gates it behind !IsEnabled()). At/just after net_Spawn the
+	// zone is enabled (eZoneStateIdle), so a campfire turned off on spawn/new-game
+	// would otherwise keep visibly burning.
+	StopIdleParticles(true);
+
 	R_ASSERT(NULL==m_pDisabledParticles);
 	LPCSTR str = pSettings->r_string(cNameSect(), "disabled_particles");
 	m_pDisabledParticles = Particles::Details::Create(str,FALSE);

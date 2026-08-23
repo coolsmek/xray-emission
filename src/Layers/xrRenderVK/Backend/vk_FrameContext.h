@@ -1,4 +1,4 @@
-﻿// Per-frame ring buffer synchronizations
+// Per-frame ring buffer synchronizations
 /* This file replaces the traditional D3D implicit synchronization. It groups all resources that are
 altered on a per-frame basis (like command buffers, dynamic uniform buffer memory, and swapchain image
 availability semaphores) into a clean, trackable structure. */
@@ -21,4 +21,4 @@ struct vk_FrameContext
 };
 
 // Global frame context ring array
-extern vk_FrameContext GFrameContexts[2; // Matching CHW::MAX_FRAMES_IN_FLIGHT
+extern vk_FrameContext GFrameContexts[CHW::MAX_FRAMES_IN_FLIGHT];

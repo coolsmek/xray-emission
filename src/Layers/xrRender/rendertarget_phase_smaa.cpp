@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#ifndef USE_VK
 
 
 void CRenderTarget::phase_smaa()
@@ -179,4 +180,5 @@ void CRenderTarget::phase_ssfx_taa()
 	RCache.Render(D3DPT_TRIANGLELIST, Offset, 0, 4, 0, 2);
 }
 
+#endif
 #endif

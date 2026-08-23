@@ -119,7 +119,7 @@ dxRender_Visual* CModelPool::Instance_Load(const char* N, BOOL allow_register, b
 				Msg("!Can't find model file '%s'.",name);
                 return 0;
 #else
-				if (assert)	
+				if (assert)
 					Debug.fatal(DEBUG_INFO, "Can't find model file '%s'.", name);
 				else
 					return nullptr;
@@ -142,10 +142,12 @@ dxRender_Visual* CModelPool::Instance_Load(const char* N, BOOL allow_register, b
 	V = Instance_Create(H.type);
 	V->Load(N, data, 0);
 	FS.r_close(data);
-	g_pGamePersistent->RegisterModel(V);
+	// g_pGamePersistent is null in tool mode (no game running) — guard before calling.
+	if (g_pGamePersistent)
+		g_pGamePersistent->RegisterModel(V);
 
 	// Registration
-	if (allow_register) 
+	if (allow_register)
 		V = Instance_Register(N, V);
 
 	return V;
@@ -161,7 +163,7 @@ dxRender_Visual* CModelPool::Instance_Load(LPCSTR name, IReader* data, BOOL allo
 	V->Load(name, data, 0);
 
 	// Registration
-	if (allow_register) 
+	if (allow_register)
 		V = Instance_Register(name, V);
 	return V;
 }
@@ -277,7 +279,7 @@ dxRender_Visual* CModelPool::Create(const char* name, IReader* data, bool assert
 	xr_strcpy(low_name, name);
 	strlwr(low_name);
 	if (strext(low_name)) *strext(low_name) = 0;
-	
+
 	// 0. Search POOL
 	POOL_IT it = Pool.find(low_name);
 	if (it != Pool.end())
@@ -337,7 +339,7 @@ dxRender_Visual* CModelPool::CreateChild(LPCSTR name, IReader* data)
 	return Model;
 }
 
-extern  xr_atomic_bool ENGINE_API g_bRendering; 
+extern  xr_atomic_bool ENGINE_API g_bRendering;
 
 void CModelPool::DeleteInternal(dxRender_Visual* & V, BOOL bDiscard)
 {
@@ -416,7 +418,7 @@ void CModelPool::DeleteQueuedDeffer()
     {
         if (Vis)
             DeleteInternal(Vis);
-    }	
+    }
 
 	ModelsToDeleteDeffer.clear();
 }
@@ -513,7 +515,7 @@ bool CModelPool::Exists(LPCSTR N)
 
 	// Prefetch model
 	dxRender_Visual* V = Create(N, 0, false);
-	if (V) 
+	if (V)
 	{
 		Delete(V, FALSE);
 		return true;
@@ -602,7 +604,7 @@ void CModelPool::memory_stats(u32& vb_mem_video, u32& vb_mem_system, u32& ib_mem
 
 		if (vis_ptr == NULL)
 			continue;
-#if !defined(USE_DX10) && !defined(USE_DX11)
+#if !defined(USE_DX10) && !defined(USE_DX11) && !defined(USE_VK)
 		D3DINDEXBUFFER_DESC IB_desc;
 		D3DVERTEXBUFFER_DESC VB_desc;
 
@@ -647,7 +649,7 @@ void CModelPool::memory_stats(u32& vb_mem_video, u32& vb_mem_system, u32& ib_mem
 #ifdef _EDITOR
 IC bool	_IsBoxVisible(dxRender_Visual* visual, const Fmatrix& transform)
 {
-    Fbox 		bb; 
+    Fbox 		bb;
     bb.xform	(visual->vis.box,transform);
     return 		::Render->occ_visible(bb);
 }

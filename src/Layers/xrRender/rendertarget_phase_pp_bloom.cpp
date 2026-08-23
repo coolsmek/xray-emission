@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#ifndef USE_VK
 
 extern Fvector4 ps_pp_bloom_thresh;
 extern Fvector4 ps_pp_bloom_weight;
@@ -47,3 +48,4 @@ void CRenderTarget::phase_pp_bloom()
 	RCache.set_Geometry(g_combine);
 	RCache.Render(D3DPT_TRIANGLELIST, Offset, 0, 4, 0, 2);
 };
+#endif

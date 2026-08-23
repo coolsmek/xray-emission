@@ -589,6 +589,41 @@ class cl_hemi_color : public R_constant_setup
 
 static cl_hemi_color binder_hemi_color;
 
+// env_color: hemisphere environment color used by deferred combine (combine_1.ps).
+// Mirrors the manual set_c in phase_combine — hemi_color * 2, weight in .w.
+class cl_env_color : public R_constant_setup
+{
+    u32 marker = u32(-1);
+    Fvector4 result{};
+    virtual void setup(R_constant* C)
+    {
+        if (marker != Device.dwFrame && g_pGamePersistent &&
+            g_pGamePersistent->Environment().CurrentEnv)
+        {
+            marker = Device.dwFrame;
+            CEnvDescriptorMixer& d = *g_pGamePersistent->Environment().CurrentEnv;
+            result.set(d.hemi_color.x * 2.f + EPS,
+                       d.hemi_color.y * 2.f + EPS,
+                       d.hemi_color.z * 2.f + EPS,
+                       d.weight);
+        }
+        RCache.set_c(C, result);
+    }
+};
+static cl_env_color binder_env_color;
+
+// hmodel_stuff: hemi vibrance / contrast / wet-surfaces (was RegisterConstantSetup in R4).
+class cl_hmodel_stuff : public R_constant_setup
+{
+    virtual void setup(R_constant* C)
+    {
+        if (!g_pGamePersistent || !g_pGamePersistent->Environment().CurrentEnv) return;
+        CEnvDescriptor& E = *g_pGamePersistent->Environment().CurrentEnv;
+        RCache.set_c(C, E.m_fHemiVibrance, E.m_fHemiContrast, E.m_fWetSurfaces, 0.f);
+    }
+};
+static cl_hmodel_stuff binder_hmodel_stuff;
+
 class cl_sky_color : public R_constant_setup
 {
 	u32 marker;
@@ -609,12 +644,42 @@ static cl_sky_color binder_sky_color;
 
 static class cl_screen_res : public R_constant_setup
 {
-	virtual void setup(R_constant* C)
-	{
-		RCache.set_c(C, (float)RDEVICE.dwWidth, (float)RDEVICE.dwHeight, 1.0f / (float)RDEVICE.dwWidth,
-		             1.0f / (float)RDEVICE.dwHeight);
-	}
+    virtual void setup(R_constant* C)
+    {
+#if defined(USE_VK)
+        static bool s_logged = false;
+        if (!s_logged) {
+            s_logged = true;
+            Msg("[VK] binder_screen_res::setup: w=%u h=%u, vs.index=%u ps.index=%u",
+                RDEVICE.dwWidth, RDEVICE.dwHeight,
+                (u32)C->vs.index, (u32)C->ps.index);
+        }
+#endif
+        RCache.set_c(C, (float)RDEVICE.dwWidth, (float)RDEVICE.dwHeight,
+                     1.0f/(float)RDEVICE.dwWidth, 1.0f/(float)RDEVICE.dwHeight);
+    }
 } binder_screen_res;
+
+static class cl_pos_decompression_params : public R_constant_setup
+{
+    virtual void setup(R_constant* C)
+    {
+        float VertTan = -1.0f * tanf(deg2rad(Device.fFOV / 2.0f));
+        float HorzTan = -VertTan / Device.fASPECT;
+        RCache.set_c(C, HorzTan, VertTan,
+                     (2.0f * HorzTan) / (float)RDEVICE.dwWidth,
+                     (2.0f * VertTan) / (float)RDEVICE.dwHeight);
+    }
+} binder_pos_decompression_params;
+
+static class cl_pos_decompression_params2 : public R_constant_setup
+{
+    virtual void setup(R_constant* C)
+    {
+        RCache.set_c(C, (float)RDEVICE.dwWidth, (float)RDEVICE.dwHeight,
+                     1.0f / (float)RDEVICE.dwWidth, 1.0f / (float)RDEVICE.dwHeight);
+    }
+} binder_pos_decompression_params2;
 
 static class cl_screen_params : public R_constant_setup
 {
@@ -1418,10 +1483,15 @@ void CBlender_Compile::SetMapping()
 	r_Constant("L_sun_dir_e", &binder_sun0_dir_e);
 	//	r_Constant				("L_lmap_color",	&binder_lm_color);
 	r_Constant("L_hemi_color", &binder_hemi_color);
+	r_Constant("env_color",    &binder_env_color);
+	r_Constant("hmodel_stuff", &binder_hmodel_stuff);
 	r_Constant("L_ambient", &binder_amb_color);
 #endif
 
 	r_Constant("screen_res", &binder_screen_res);
+	r_Constant("pos_decompression_params",  &binder_pos_decompression_params);
+	r_Constant("pos_decompression_params2", &binder_pos_decompression_params2);
+	r_Constant("pos_decompression_params_hud", &binder_pos_decompression_params); // HUD variant reuses same math for now
 	r_Constant("ogse_c_screen", &binder_screen_params);
 	r_Constant("near_far_plane", &binder_near_far_plane);
 	// misc

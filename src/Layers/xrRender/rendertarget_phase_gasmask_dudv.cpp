@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#ifndef USE_VK
 
 void CRenderTarget::phase_gasmask_dudv()
 {
@@ -54,3 +55,4 @@ void CRenderTarget::phase_gasmask_dudv()
 	HW.pContext->CopyResource(rt_Generic_0->pTexture->surface_get(), dest_rt->pTexture->surface_get());
 #endif
 };
+#endif

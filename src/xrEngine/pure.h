@@ -100,6 +100,27 @@ public:
 	{
 		in_process = true;
 		if (R.empty()) return;
+
+        // --- per-callback timing (menu perf bisect) ---
+        extern bool g_seqframe_perf;   // defined in device.cpp
+        if (g_seqframe_perf)
+        {
+            for (u32 i = 0; i < R.size(); i++)
+                if (R[i].Prio != REG_PRIORITY_INVALID)
+                {
+                    CTimer t; t.Start();
+                    f(R[i].Object);
+                    float ms = t.GetElapsed_sec() * 1000.f;
+                    if (ms > 0.5f)   // only log the expensive ones
+                        Msg("  VK-CB  obj=%p prio=%08x %.3f ms", R[i].Object, R[i].Prio, ms);
+                }
+            if (changed) Resort();
+            in_process = false;
+            return;
+            return;
+        }
+        // --- end timing ---
+
 		if (R[0].Prio == REG_PRIORITY_CAPTURE) f(R[0].Object);
 		else
 		{

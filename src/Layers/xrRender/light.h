@@ -5,7 +5,7 @@
 
 //#include "../../xrEngine/xr_object.h"
 
-#if (RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4)
+#if (RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4) || (RENDER==R_VK)
 #	include "light_package.h"
 #	include "light_GI.h"
 #include "../xrRender/r__dsgraph_manager.h"
@@ -77,11 +77,11 @@ public:
 
 	float virtual_size;
 
-#if (RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4)
+#if (RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4) || (RENDER==R_VK)
 	float			falloff;			// precalc to make light equal to zero at light range
-	float	        attenuation0;		// Constant attenuation		
-	float	        attenuation1;		// Linear attenuation		
-	float	        attenuation2;		// Quadratic attenuation	
+	float	        attenuation0;		// Constant attenuation
+	float	        attenuation1;		// Linear attenuation
+	float	        attenuation2;		// Quadratic attenuation
 
 	light*						omnipart	[6]	;
 	xr_vector<light_indirect>	indirect		;
@@ -167,8 +167,8 @@ public:
 	virtual void set_range(float R);
 
 	virtual void set_virtual_size(float R)
-	{ 
-		virtual_size = R; 
+	{
+		virtual_size = R;
 	};
 
 	virtual void set_color(const Fcolor& C) { color.set(C); }
@@ -194,7 +194,7 @@ public:
 	virtual IRender_Light* dcast_Light() { return this; }
 
 	virtual vis_data& get_homdata();
-#if (RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4)
+#if (RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4) || (RENDER==R_VK)
 	void			gi_generate				();
 	void			xform_calc				();
 	void			vis_prepare				();
@@ -202,7 +202,7 @@ public:
 	void			export_					();
 	void			set_attenuation_params	(float a0, float a1, float a2, float fo);
 	void			optimize_smap_size		();
-#endif // (RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4)
+#endif // (RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4) || (RENDER==R_VK)
 
 	float get_LOD();
 

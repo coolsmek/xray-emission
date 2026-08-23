@@ -468,6 +468,23 @@ void CLocatorAPI::ProcessArchive(LPCSTR _path)
 		if (it->path == path)
 			return;
 
+    // ---- NEW: skip mods unless -no_mods is not active, or it's the required mod ----
+    if (Core.ParamsData.test(ECoreParams::no_mods))
+    {
+        // Check if the path contains "mods\" (Anomaly mods folder)
+        // but allow "000_modded_exes_gamedata.db0" through unconditionally
+        string_path lower_path;
+        xr_strcpy(lower_path, _path);
+        xr_strlwr(lower_path);
+
+        if (strstr(lower_path, "\\mods\\"))
+        {
+            // Allow the required modded-exe compatibility db through
+            if (!strstr(lower_path, "000_modded_exes_gamedata"))
+                return; // skip this mod
+        }
+    }
+
 	m_archives.push_back(archive());
 	archive& A = m_archives.back();
 	A.vfs_idx = m_archives.size() - 1;
@@ -775,7 +792,7 @@ void CLocatorAPI::_initialize(u32 flags, LPCSTR target_folder, LPCSTR fs_name)
 	else
 	{
 		IReader* pFSltx = setup_fs_ltx(fs_name);
-		// append all pathes    
+		// append all pathes
 		string_path id, root, add, def, capt;
 		const char *lp_add, *lp_def, *lp_capt;
 		string16 b_v;

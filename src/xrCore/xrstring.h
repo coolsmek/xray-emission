@@ -147,7 +147,7 @@ private:
 private:
 	struct str_container_constructor_key { explicit str_container_constructor_key() = default; };
 	str_container();
-	
+
 public:
 	str_container(str_container_constructor_key);
 	static str_container* create();

@@ -166,6 +166,7 @@ const u32 LUMINANCE_size = 16;
 #define		SE_SUN_NEAR_MINMAX	4
 //	For rain R3 rendering
 #define		SE_SUN_RAIN_SMAP	5
+#define		SE_SUN_NEAR_HUD		5
 
 extern float ps_r2_gloss_factor;
 extern float ps_r2_gloss_min;

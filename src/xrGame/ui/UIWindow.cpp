@@ -67,7 +67,7 @@ void draw_rect(Frect& r, u32 color)
 
 //.	UIRender->FlushLineStrip();
 	UIRender->FlushPrimitive();
-	
+
 #endif // DEBUG
 }
 
@@ -280,6 +280,9 @@ void CUIWindow::DetachChild(CUIWindow* pChild)
 	if (m_pMouseCapturer == pChild)
 		SetCapture(pChild, false);
 
+	if (m_pKeyboardCapturer == pChild)
+		SetKeyboardCapture(pChild, false);
+
 	{
 		xrCriticalSectionGuard guard(csUi);
 
@@ -324,7 +327,7 @@ void CUIWindow::GetAbsoluteRect(Frect& r)
 }
 
 //реакция на мышь
-//координаты курсора всегда, кроме начального вызова 
+//координаты курсора всегда, кроме начального вызова
 //задаются относительно текущего окна
 
 #define DOUBLE_CLICK_TIME 250
@@ -403,11 +406,16 @@ bool CUIWindow::OnMouseAction(float x, float y, EUIMessages mouse_action)
 	//происходит в обратном порядке, чем рисование окон
 	//(последние в списке имеют высший приоритет)
 	xrCriticalSectionGuard guard(csUi);
-	WINDOW_LIST::reverse_iterator it = m_ChildWndList.rbegin();
-
-	for (; it != m_ChildWndList.rend(); ++it)
+	// We use a safe index-based loop instead of reverse_iterator here.
+	// If a Lua script callback (e.g., MCM) deletes a UI element mid-loop,
+	// iterators become invalid and cause an Access Violation.
+	// This bounds-checked loop ensures we never read dangling memory.
+	for (int i = (int)m_ChildWndList.size() - 1; i >= 0; --i)
 	{
-		CUIWindow* w = (*it);
+		if (i >= (int)m_ChildWndList.size()) i = (int)m_ChildWndList.size() - 1;
+		if (i < 0) break;
+
+		CUIWindow* w = m_ChildWndList[i];
 		Frect wndRect = w->GetWndRect();
 		if (wndRect.in(cursor_pos) && w->HitClipPass(GetUICursor().GetCursorPosition()))
 		{
@@ -520,13 +528,16 @@ bool CUIWindow::OnKeyboardAction(int dik, EUIMessages keyboard_action)
 	}
 
 	xrCriticalSectionGuard guard(csUi);
-	WINDOW_LIST::reverse_iterator it = m_ChildWndList.rbegin();
-
-	for (; it != m_ChildWndList.rend(); ++it)
+	// Safe index-based loop to prevent iterator invalidation crashes if scripts modify the UI tree.
+	for (int i = (int)m_ChildWndList.size() - 1; i >= 0; --i)
 	{
-		if ((*it)->IsEnabled())
+		if (i >= (int)m_ChildWndList.size()) i = (int)m_ChildWndList.size() - 1;
+		if (i < 0) break;
+
+		CUIWindow* w = m_ChildWndList[i];
+		if (w->IsEnabled())
 		{
-			result = (*it)->OnKeyboardAction(dik, keyboard_action);
+			result = w->OnKeyboardAction(dik, keyboard_action);
 
 			if (result) return true;
 		}
@@ -546,13 +557,16 @@ bool CUIWindow::OnKeyboardHold(int dik)
 	}
 
 	xrCriticalSectionGuard guard(csUi);
-	WINDOW_LIST::reverse_iterator it = m_ChildWndList.rbegin();
-
-	for (; it != m_ChildWndList.rend(); ++it)
+	// Safe index-based loop to prevent iterator invalidation crashes if scripts modify the UI tree.
+	for (int i = (int)m_ChildWndList.size() - 1; i >= 0; --i)
 	{
-		if ((*it)->IsEnabled())
+		if (i >= (int)m_ChildWndList.size()) i = (int)m_ChildWndList.size() - 1;
+		if (i < 0) break;
+
+		CUIWindow* w = m_ChildWndList[i];
+		if (w->IsEnabled())
 		{
-			result = (*it)->OnKeyboardHold(dik);
+			result = w->OnKeyboardHold(dik);
 
 			if (result) return true;
 		}
@@ -579,15 +593,17 @@ void CUIWindow::SetKeyboardCapture(CUIWindow* pChildWindow, bool capture_status)
 }
 
 
-//обработка сообщений 
+//обработка сообщений
 void CUIWindow::SendMessage(CUIWindow* pWnd, s16 msg, void* pData)
 {
 	xrCriticalSectionGuard guard(csUi);
 	//оповестить дочерние окна
-	for (WINDOW_LIST_it it = m_ChildWndList.begin(); m_ChildWndList.end() != it; ++it)
+	// Safe index-based loop to prevent iterator invalidation crashes if scripts modify the UI tree.
+	for (int i = 0; i < (int)m_ChildWndList.size(); ++i)
 	{
-		if ((*it)->IsEnabled())
-			(*it)->SendMessage(pWnd, msg, pData);
+		CUIWindow* w = m_ChildWndList[i];
+		if (w->IsEnabled())
+			w->SendMessage(pWnd, msg, pData);
 	}
 }
 
@@ -827,13 +843,13 @@ void CUIWindow::RemoveHint()
 	m_pHint = NULL;
 }
 
-void CUIWindow::SetHintText(LPCSTR text)	
-{ 
+void CUIWindow::SetHintText(LPCSTR text)
+{
 	m_sHint = text;
 }
 
 LPCSTR CUIWindow::GetHintText()
-{ 
+{
 	return m_sHint;
 }
 */

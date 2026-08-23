@@ -82,7 +82,13 @@ void CRenderDevice::Reset(bool precache)
 	ShowCursor(TRUE);
 	u32 tm_start = TimerAsync();
 
+	if (strstr(Core.Params, "-verify_settings_menu"))
+		Msg("VERIFY_SETTINGS_MENU: CRenderDevice::Reset - before m_pRender->Reset, dwWidth=%d, dwHeight=%d", dwWidth, dwHeight);
+
 	m_pRender->Reset(m_hWnd, dwWidth, dwHeight, fWidth_2, fHeight_2);
+
+	if (strstr(Core.Params, "-verify_settings_menu"))
+		Msg("VERIFY_SETTINGS_MENU: CRenderDevice::Reset - after m_pRender->Reset, dwWidth=%d, dwHeight=%d", dwWidth, dwHeight);
 
 	if (g_pGamePersistent)
 		g_pGamePersistent->Environment().bNeed_re_create_env = TRUE;
@@ -100,7 +106,14 @@ void CRenderDevice::Reset(bool precache)
 
 	if (dwWidth_before != dwWidth || dwHeight_before != dwHeight)
 	{
+		if (strstr(Core.Params, "-verify_settings_menu"))
+			Msg("VERIFY_SETTINGS_MENU: CRenderDevice::Reset - FIRING seqResolutionChanged!");
 		seqResolutionChanged.Process(rp_ScreenResolutionChanged);
+	}
+	else
+	{
+		if (strstr(Core.Params, "-verify_settings_menu"))
+			Msg("VERIFY_SETTINGS_MENU: CRenderDevice::Reset - SKIPPING seqResolutionChanged because width/height unchanged");
 	}
 
 	if (g_screenmode == 1)

@@ -53,19 +53,42 @@ struct R_statistics
 	R_statistics_element s_dynamic_4B;
 };
 
+#if defined(USE_VK)
+struct VkRecordContext;
+#endif
+
 #pragma warning(push)
 #pragma warning(disable:4324)
 class ECORE_API CBackend
 {
+#if defined(USE_VK)
+    friend class vk_PipelineCacheManager;
+    // VK's phase_scene_prepare must reset cached backend state before the scene,
+    // because the 3D-PDA path draws ~120 UI primitives first and VK (unlike DX11's
+    // per-draw-resetting immediate context) caches state. Grant CRenderTarget access
+    // to the otherwise-private Invalidate() instead of making it public globally.
+    friend class CRenderTarget;
 public:
-#if defined(USE_DX10) || defined(USE_DX11)
+    VkRecordContext* m_ctx;
+#endif
+public:
+#if defined(USE_VK)
+    bool m_texturesDirty = true;
+    bool m_pipelineDirty = true;
+    // Accessors/setters for private texture arrays
+    IC CTexture* GetTexturePS(int i) const { return textures_ps[i]; }
+    IC CTexture* GetTextureVS(int i) const { return textures_vs[i]; }
+    IC void SetTexturePS(int i, CTexture* t) { if (textures_ps[i] != t) { textures_ps[i] = t; m_texturesDirty = true; } }
+    IC void SetTextureVS(int i, CTexture* t) { if (textures_vs[i] != t) { textures_vs[i] = t; m_texturesDirty = true; } }
+#endif
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	enum MaxTextures
 	{
 		//	Actually these values are 128
 		mtMaxPixelShaderTextures = 16,
 		mtMaxVertexShaderTextures = 4,
 		mtMaxGeometryShaderTextures = 16,
-#	ifdef USE_DX11
+#	if defined(USE_DX11) || defined(USE_VK)
 		mtMaxHullShaderTextures = 16,
 		mtMaxDomainShaderTextures = 16,
 		mtMaxComputeShaderTextures = 16,
@@ -99,11 +122,11 @@ public:
 	R_LOD LOD;
 #endif
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	ref_cbuffer m_aVertexConstants[MaxCBuffers];
 	ref_cbuffer m_aPixelConstants[MaxCBuffers];
 	ref_cbuffer m_aGeometryConstants[MaxCBuffers];
-#	ifdef USE_DX11
+#	if defined(USE_DX11) || defined(USE_VK)
 	ref_cbuffer m_aHullConstants[MaxCBuffers];
 	ref_cbuffer m_aDomainConstants[MaxCBuffers];
 	ref_cbuffer m_aComputeConstants[MaxCBuffers];
@@ -114,13 +137,38 @@ public:
 	DWORD dummy1; //	Padding to avoid warning
 	DWORD dummy2; //	Padding to avoid warning
 #endif
+
+#if defined(USE_VK)
+public:
+	struct StreamState
+	{
+		VkBuffer     VBuffer;
+		VkDeviceSize Offset;
+		u32          Stride;
+	};
+private:
+	VkCommandBuffer m_activeCmdBuffer;
+	u32             m_currentImageIndex;
+	StreamState     m_boundVertexStreams[4];
+	VkBuffer        m_boundIndexStream;
+	VkDeviceSize    m_boundIndexOffset;
+	VkIndexType     m_boundIndexType;
+public:
+	void OnFrameBegin(VkCommandBuffer cmdBuffer, u32 imageIndex);
+	void InvalidateCtx();
+	void SetVertexStream(u32 streamSlot, VkBufferWrapper* buf, VkDeviceSize offset, u32 stride);
+	void SetIndexStream(VkBuffer buffer, VkDeviceSize offset, VkIndexType indexType);
+	VkCommandBuffer GetActiveCommandBuffer() const;
+    u32 GetCurrentImageIndex() const;
+#endif
+
 private:
 	// Render-targets
 	ID3DRenderTargetView* pRT[4];
 	ID3DDepthStencilView* pZB;
 
 	// Vertices/Indices/etc
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	SDeclaration* decl;
 #else	//	USE_DX10
 	IDirect3DVertexDeclaration9* decl;
@@ -137,39 +185,53 @@ private:
 	ID3DState* state;
 	ID3DPixelShader* ps;
 	ID3DVertexShader* vs;
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	ID3DGeometryShader* gs;
-#	ifdef USE_DX11
+#	if defined(USE_DX11) || defined(USE_VK)
 	ID3D11HullShader* hs;
 	ID3D11DomainShader* ds;
 	ID3D11ComputeShader* cs;
 #	endif
-#endif	//	USE_DX10
+#endif	//	USE_DX10 || USE_VK
 
 #ifdef DEBUG
 	LPCSTR							ps_name;
 	LPCSTR							vs_name;
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	LPCSTR							gs_name;
-#	ifdef USE_DX11
+#	if defined(USE_DX11) || defined(USE_VK)
 	LPCSTR							hs_name;
 	LPCSTR							ds_name;
 	LPCSTR							cs_name;
 #	endif
 #endif	//	USE_DX10
 #endif
-	u32 stencil_enable;
-	u32 stencil_func;
-	u32 stencil_ref;
-	u32 stencil_mask;
-	u32 stencil_writemask;
-	u32 stencil_fail;
-	u32 stencil_pass;
-	u32 stencil_zfail;
+    u32 stencil_enable;
+    u32 stencil_func;
+    u32 stencil_ref;
+    u32 stencil_mask;
+    u32 stencil_writemask;
+    u32 stencil_fail;
+    u32 stencil_pass;
+    u32 stencil_zfail;
+
+#ifdef USE_VK
+    // Phase A.3 Alpha blending tracking
+    u32 blend_enable;
+    u32 blend_src;
+    u32 blend_dst;
+    u32 blend_op;
+    u32 blend_src_alpha;
+    u32 blend_dst_alpha;
+    u32 blend_op_alpha;
+#endif
 	u32 colorwrite_mask;
 	u32 fill_mode;
 	u32 cull_mode;
 	u32 z_enable;
+#ifdef USE_VK
+	u32 z_write_enable;
+#endif
 	u32 z_func;
 	u32 alpha_ref;
 
@@ -182,14 +244,14 @@ private:
 	CTexture* textures_ps [mtMaxPixelShaderTextures]; // stages
 	//CTexture*						textures_vs	[5	];	// dmap + 4 vs
 	CTexture* textures_vs [mtMaxVertexShaderTextures]; // 4 vs
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	CTexture* textures_gs [mtMaxGeometryShaderTextures]; // 4 vs
-#	ifdef USE_DX11
+#	if defined(USE_DX11) || defined(USE_VK)
 	CTexture* textures_hs [mtMaxHullShaderTextures]; // 4 vs
 	CTexture* textures_ds [mtMaxDomainShaderTextures]; // 4 vs
 	CTexture* textures_cs [mtMaxComputeShaderTextures]; // 4 vs
 #	endif
-#endif	//	USE_DX10
+#endif	//	USE_DX10 || USE_VK
 #ifdef _EDITOR
 	CMatrix*						matrices	[8	];	// matrices are supported only for FFP
 #endif
@@ -222,29 +284,30 @@ public:
 public:
 	IC CTexture* get_ActiveTexture(u32 stage)
 	{
-		CTexture* T = NULL;
-		if (stage < CTexture::rstVertex) T = textures_ps[stage];
-		else if (stage < CTexture::rstGeometry) T = textures_vs[stage - CTexture::rstVertex];
+		CTexture* tex = NULL;
+		if (stage < CTexture::rstVertex) tex = textures_ps[stage];
+		else if (stage < CTexture::rstGeometry) tex = textures_vs[stage - CTexture::rstVertex];
 #ifdef USE_DX10
-		else T = textures_gs[stage - CTexture::rstGeometry];
+		else tex = textures_gs[stage - CTexture::rstGeometry];
 #elif USE_DX11
-		else if (stage < CTexture::rstHull) T = textures_gs[stage - CTexture::rstGeometry];
-		else if (stage < CTexture::rstDomain) T = textures_hs[stage - CTexture::rstHull];
-		else if (stage < CTexture::rstCompute) T = textures_ds[stage - CTexture::rstDomain];
-		else if (stage < CTexture::rstInvalid) T = textures_cs[stage - CTexture::rstCompute];
+		else if (stage < CTexture::rstHull) tex = textures_gs[stage - CTexture::rstGeometry];
+		else if (stage < CTexture::rstDomain) tex = textures_hs[stage - CTexture::rstHull];
+		else if (stage < CTexture::rstCompute) tex = textures_ds[stage - CTexture::rstDomain];
+		else if (stage < CTexture::rstInvalid) tex = textures_cs[stage - CTexture::rstCompute];
 		else
 		{
 			VERIFY(!"Invalid texture stage");
 		}
+#elif USE_VK
+		else if (stage < CTexture::rstHull) tex = textures_gs[stage - CTexture::rstGeometry];
+		else if (stage < CTexture::rstDomain) tex = textures_hs[stage - CTexture::rstHull];
+		else if (stage < CTexture::rstCompute) tex = textures_ds[stage - CTexture::rstDomain];
+		else if (stage < CTexture::rstInvalid) tex = textures_cs[stage - CTexture::rstCompute];
 #endif
-		while (T&&!T->flags.bLoaded)
-		{
-			SwitchToThread();
-		}
-		return T;
+		return tex;
 	}
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	IC void get_ConstantDirect(shared_str& n, u32 DataSize, void** pVData, void** pGData, void** pPData);
 #else	//USE_DX10
 	IC R_constant_array& get_ConstantCache_Vertex() { return constants.a_vertex; }
@@ -270,11 +333,12 @@ public:
 	IC ID3DRenderTargetView* get_RT(u32 ID = 0);
 	IC ID3DDepthStencilView* get_ZB();
 
-	IC void set_Constants(R_constant_table* C);
-	IC void set_Constants(ref_ctable& C) { set_Constants(&*C); }
+	void set_Constants(R_constant_table* _C);
+	IC void set_Constants(ref_ctable& _C) { set_Constants(&*_C); }
 
-	void set_Textures(STextureList* T);
-	IC void set_Textures(ref_texture_list& T) { set_Textures(&*T); }
+	//Went from T -> _T
+	void set_Textures(STextureList* _T);
+	IC void set_Textures(ref_texture_list& _T) { set_Textures(&*_T); }
 
 #ifdef _EDITOR
 	IC	void						set_Matrices		(SMatrixList* M);
@@ -288,47 +352,51 @@ public:
 	IC void set_Shader(ref_shader& S, u32 pass = 0) { set_Shader(&*S, pass); }
 
 	ICF void set_States(ID3DState* _state);
+#ifdef USE_VK
+	void set_States(ref_state& _state);
+#else
 	ICF void set_States(ref_state& _state) { set_States(_state->state); }
+#endif
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	ICF void set_Format(SDeclaration* _decl);
 #else	//	USE_DX10
 	ICF void set_Format(IDirect3DVertexDeclaration9* _decl);
 #endif	//	USE_DX10
 
 	ICF void set_PS(ID3DPixelShader* _ps, LPCSTR _n = 0);
-	ICF void set_PS(ref_ps& _ps) { set_PS(_ps->ps, _ps->cName.c_str()); }
+	ICF void set_PS(ref_ps& _ps) { set_PS(_ps ? _ps->ps : nullptr, _ps ? _ps->cName.c_str() : nullptr); }
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	ICF void set_GS(ID3DGeometryShader* _gs, LPCSTR _n = 0);
-	ICF void set_GS(ref_gs& _gs) { set_GS(_gs->gs, _gs->cName.c_str()); }
+	ICF void set_GS(ref_gs& _gs) { set_GS(_gs ? _gs->gs : nullptr, _gs ? _gs->cName.c_str() : nullptr); }
 
-#	ifdef USE_DX11
+#	if defined(USE_DX11) || defined(USE_VK)
 	ICF void set_HS(ID3D11HullShader* _hs, LPCSTR _n = 0);
-	ICF void set_HS(ref_hs& _hs) { set_HS(_hs->sh, _hs->cName.c_str()); }
+	ICF void set_HS(ref_hs& _hs) { set_HS(_hs ? _hs->sh : nullptr, _hs ? _hs->cName.c_str() : nullptr); }
 
 	ICF void set_DS(ID3D11DomainShader* _ds, LPCSTR _n = 0);
-	ICF void set_DS(ref_ds& _ds) { set_DS(_ds->sh, _ds->cName.c_str()); }
+	ICF void set_DS(ref_ds& _ds) { set_DS(_ds ? _ds->sh : nullptr, _ds ? _ds->cName.c_str() : nullptr); }
 
 	ICF void set_CS(ID3D11ComputeShader* _cs, LPCSTR _n = 0);
-	ICF void set_CS(ref_cs& _cs) { set_CS(_cs->sh, _cs->cName.c_str()); }
+	ICF void set_CS(ref_cs& _cs) { set_CS(_cs ? _cs->sh : nullptr, _cs ? _cs->cName.c_str() : nullptr); }
 #	endif
 
 #endif	//	USE_DX10
 
-#ifdef USE_DX11
+#if defined(USE_DX11) || defined(USE_VK)
 	ICF bool is_TessEnabled();
 #else
 	ICF bool is_TessEnabled() { return false; }
 #endif
 
 	ICF void set_VS(ref_vs& _vs);
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	ICF void set_VS(SVS* _vs);
 protected: //	In DX10 we need input shader signature which is stored in ref_vs
 #endif	//	USE_DX10
 	ICF void set_VS(ID3DVertexShader* _vs, LPCSTR _n = 0);
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 public:
 #endif	//	USE_DX10
 
@@ -340,6 +408,9 @@ public:
 	                    u32 _writemask = 0x00, u32 _fail = D3DSTENCILOP_KEEP, u32 _pass = D3DSTENCILOP_KEEP,
 	                    u32 _zfail = D3DSTENCILOP_KEEP);
 	IC void set_Z(u32 _enable);
+#ifdef USE_VK
+	IC void set_ZWrite(u32 _enable);
+#endif
 	IC void set_ZFunc(u32 _func);
 	IC void set_AlphaRef(u32 _value);
 	IC void set_ColorWriteEnable(
@@ -351,6 +422,18 @@ public:
 	void set_ClipPlanes(u32 _enable, Fplane* _planes = NULL, u32 count = 0);
 	void set_ClipPlanes(u32 _enable, Fmatrix* _xform = NULL, u32 fmask = 0xff);
 	IC void set_Scissor(Irect* rect = NULL);
+
+#ifdef USE_VK
+    // Explicit alpha-blend state for UI/2D passes whose shader-cache blenders
+    // don't record blend into SimulatorStates. Mirrors D3DRS_* enum values so
+    // set_States and this path populate identical fields.
+    // D3DBLEND_SRCALPHA=5, D3DBLEND_INVSRCALPHA=6, D3DBLENDOP_ADD=1, D3DBLEND_ONE=2, D3DBLEND_ZERO=1
+    void set_Blend(u32 enable,
+                   u32 src   = 5,  u32 dst   = 6,
+                   u32 op    = 1,
+                   u32 srcA  = 2,  u32 dstA  = 1,
+                   u32 opA   = 1);
+#endif
 
 	// constants
 	ICF R_constant* get_c(LPCSTR n)
@@ -366,18 +449,19 @@ public:
 	}
 
 	// constants - direct (fast)
-	ICF void set_c(R_constant* C, const Fmatrix& A) { if (C) constants.set(C, A); }
-	ICF void set_c(R_constant* C, const Fvector4& A) { if (C) constants.set(C, A); }
-	ICF void set_c(R_constant* C, float x, float y, float z, float w) { if (C) constants.set(C, x, y, z, w); }
-	ICF void set_ca(R_constant* C, u32 e, const Fmatrix& A) { if (C) constants.seta(C, e, A); }
-	ICF void set_ca(R_constant* C, u32 e, const Fvector4& A) { if (C) constants.seta(C, e, A); }
-	ICF void set_ca(R_constant* C, u32 e, float x, float y, float z, float w)
+	// went from C -> _C
+	ICF void set_c(R_constant* _C, const Fmatrix& A) { if (_C) constants.set(_C, A); }
+	ICF void set_c(R_constant* _C, const Fvector4& A) { if (_C) constants.set(_C, A); }
+	ICF void set_c(R_constant* _C, float x, float y, float z, float w) { if (_C) constants.set(_C, x, y, z, w); }
+	ICF void set_ca(R_constant* _C, u32 e, const Fmatrix& A) { if (_C) constants.seta(_C, e, A); }
+	ICF void set_ca(R_constant* _C, u32 e, const Fvector4& A) { if (_C) constants.seta(_C, e, A); }
+	ICF void set_ca(R_constant* _C, u32 e, float x, float y, float z, float w)
 	{
-		if (C) constants.seta(C, e, x, y, z, w);
+		if (_C) constants.seta(_C, e, x, y, z, w);
 	}
-#if defined(USE_DX10) || defined(USE_DX11)
-	ICF void set_c(R_constant* C, float A) { if (C) constants.set(C, A); }
-	ICF void set_c(R_constant* C, int A) { if (C) constants.set(C, A); }
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
+	ICF void set_c(R_constant* _C, float A) { if (_C) constants.set(_C, A); }
+	ICF void set_c(R_constant* _C, int A) { if (_C) constants.set(_C, A); }
 #endif	//	USE_DX10
 
 
@@ -391,7 +475,7 @@ public:
 	{
 		if (ctable) set_ca(ctable->get(n), e, x, y, z, w);
 	}
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	ICF void set_c(LPCSTR n, float A) { if (ctable) set_c(ctable->get(n), A); }
 	ICF void set_c(LPCSTR n, int A) { if (ctable) set_c(ctable->get(n), A); }
 #endif	//	USE_DX10
@@ -410,7 +494,7 @@ public:
 	{
 		if (ctable) set_ca(ctable->get(n), e, x, y, z, w);
 	}
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	ICF void set_c(shared_str& n, float A) { if (ctable) set_c(ctable->get(n), A); }
 	ICF void set_c(shared_str& n, int A) { if (ctable) set_c(ctable->get(n), A); }
 #endif	//	USE_DX10
@@ -418,7 +502,7 @@ public:
 	ICF void Render(D3DPRIMITIVETYPE T, u32 baseV, u32 startV, u32 countV, u32 startI, u32 PC);
 	ICF void Render(D3DPRIMITIVETYPE T, u32 startV, u32 PC);
 
-#ifdef USE_DX11
+#if defined(USE_DX11) || defined(USE_VK)
 	ICF void Compute(UINT ThreadGroupCountX, UINT ThreadGroupCountY, UINT ThreadGroupCountZ);
 #endif
 

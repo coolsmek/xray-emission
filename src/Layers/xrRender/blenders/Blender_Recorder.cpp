@@ -52,7 +52,7 @@ void CBlender_Compile::_cpp_Compile(ShaderElement* _SH)
 	LPCSTR base = NULL;
 	if (bDetail && BT->canBeDetailed())
 	{
-		// 
+		//
 		sh_list& lst = L_textures;
 		int id = ParseName(BT->oT_Name);
 		base = BT->oT_Name;
@@ -127,7 +127,7 @@ void CBlender_Compile::_cpp_Compile(ShaderElement* _SH)
 			bUseSteepParallax = true;
 		}
 	*/
-#ifdef USE_DX11
+#if defined(USE_DX11) || defined(USE_VK)
 	TessMethod = 0;
 #endif
 
@@ -219,10 +219,8 @@ void CBlender_Compile::PassSET_ZB(BOOL bZTest, BOOL bZWrite, BOOL bInvertZTest)
 	if (Pass()) bZWrite = FALSE;
 	RS.SetRS(D3DRS_ZFUNC, bZTest ? (bInvertZTest ? D3DCMP_GREATER : D3DCMP_LESSEQUAL) : D3DCMP_ALWAYS);
 	RS.SetRS(D3DRS_ZWRITEENABLE, BC(bZWrite));
-	/*
-	if (bZWrite || bZTest)				RS.SetRS	(D3DRS_ZENABLE,	D3DZB_TRUE);
-	else								RS.SetRS	(D3DRS_ZENABLE,	D3DZB_FALSE);
-	*/
+	if (bZWrite || bZTest)				RS.SetRS	(D3DRS_ZENABLE,	TRUE);
+	else								RS.SetRS	(D3DRS_ZENABLE,	FALSE);
 }
 
 void CBlender_Compile::PassSET_ablend_mode(BOOL bABlend, u32 abSRC, u32 abDST)
@@ -232,9 +230,9 @@ void CBlender_Compile::PassSET_ablend_mode(BOOL bABlend, u32 abSRC, u32 abDST)
 	RS.SetRS(D3DRS_SRCBLEND, bABlend ? abSRC : D3DBLEND_ONE);
 	RS.SetRS(D3DRS_DESTBLEND, bABlend ? abDST : D3DBLEND_ZERO);
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	//	Since in our engine D3DRS_SEPARATEALPHABLENDENABLE state is
-	//	always set to false and in DirectX 10 blend functions for 
+	//	always set to false and in DirectX 10 blend functions for
 	//	color and alpha are always independent, assign blend options for
 	//	alpha in DX10 identical to color.
 	RS.SetRS(D3DRS_SRCBLENDALPHA, bABlend ? abSRC : D3DBLEND_ONE);
@@ -301,7 +299,7 @@ void CBlender_Compile::StageSET_Alpha(u32 a1, u32 op, u32 a2)
 {
 	RS.SetAlpha(Stage(), a1, op, a2);
 }
-#if !defined(USE_DX10) && !defined(USE_DX11)
+#if !defined(USE_DX10) && !defined(USE_DX11) && !defined(USE_VK)
 void CBlender_Compile::StageSET_TMC(LPCSTR T, LPCSTR M, LPCSTR C, int UVW_channel)
 {
 	Stage_Texture(T);
@@ -334,6 +332,16 @@ void CBlender_Compile::Stage_Texture(LPCSTR name, u32, u32 fmin, u32 fmip, u32 f
 	i_Filter(Stage(), fmin, fmip, fmag);
 }
 #endif	//	USE_DX10
+
+#if defined(USE_VK)
+// Stage_Texture is a DX9 fixed-function concept. Under VK, texture binding
+// goes through r_dx10Texture / descriptor sets. No-op this call.
+void CBlender_Compile::Stage_Texture(LPCSTR /*name*/, u32 /*address*/,
+    u32 /*fmin*/, u32 /*fmip*/, u32 /*fmag*/)
+{
+}
+#endif // USE_VK
+
 void CBlender_Compile::Stage_Matrix(LPCSTR name, int iChannel)
 {
 	sh_list& lst = L_matrices;

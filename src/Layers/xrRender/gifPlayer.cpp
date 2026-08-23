@@ -86,6 +86,7 @@ bool CGIFAnimationPlayer::Load(const char* fname)
 
         CHK_DX(HW.pDevice->CreateShaderResourceView(texture, nullptr, &f.srv));
 #else
+#ifndef USE_VK  // gifPlayer D3D9 texture path not needed in VK build
         HRESULT result = HW.pDevice->CreateTexture(
             width, height, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &texture, nullptr);
         if (FAILED(result))
@@ -110,7 +111,9 @@ bool CGIFAnimationPlayer::Load(const char* fname)
         }
 
         R_CHK(texture->UnlockRect(0));
-#endif
+#endif // !USE_VK
+#endif  //  USE_DX10
+
         f.surface = texture;
     }
 

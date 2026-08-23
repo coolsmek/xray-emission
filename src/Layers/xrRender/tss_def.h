@@ -39,6 +39,9 @@ private:
 private:
 	xr_vector<State> States;
 public:
+	//TODO: called in xrRenderVK\Backend\vk_Backend.cpp - better comment explanation may be needed.
+	const xr_vector<State>& GetStates() const { return States; }
+	
 	void set_RS(u32 a, u32 b);
 	void set_TSS(u32 a, u32 b, u32 c);
 	void set_SAMP(u32 a, u32 b, u32 c);

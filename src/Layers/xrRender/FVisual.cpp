@@ -14,6 +14,14 @@
 
 #include "../xrRenderDX10/dx10BufferUtils.h"
 
+#if defined(USE_VK)
+// Forward declarations for VK geometry utilities (defined in xrRenderVK).
+// D3DXDeclaratorFromFVF and D3DXGetFVFVertexSize are stubbed to return 0
+// in the tool build, so we route through the real VK implementations instead.
+void     vk_FVFToDecl       (u32 FVF, D3DVERTEXELEMENT9* dcl);
+uint32_t vk_GetDeclVertexSize(const D3DVERTEXELEMENT9* dcl, uint16_t stream);
+#endif
+
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
@@ -127,12 +135,23 @@ void Fvisual::Load(const char* N, IReader* data, u32 dwFlags)
 			R_ASSERT(data->find_chunk(OGF_VERTICES));
 			vBase = 0;
 			u32 fvf = data->r_u32();
+#if defined(USE_VK)
+			// D3DXDeclaratorFromFVF / D3DXGetFVFVertexSize are stubbed to 0 in
+			// the tool build — use the real VK FVF decoder instead.
+			vk_FVFToDecl(fvf, dcl);
+#else
 			CHK_DX(D3DXDeclaratorFromFVF(fvf,dcl));
+#endif
 			vFormat = dcl;
 			vCount = data->r_u32();
+#if defined(USE_VK)
+			u32 vStride = vk_GetDeclVertexSize(dcl, 0);
+			Msg("* [FVisual] VK geometry load: fvf=0x%X stride=%u vCount=%u", fvf, vStride, vCount);
+#else
 			u32 vStride = D3DXGetFVFVertexSize(fvf);
+#endif
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 			VERIFY(NULL==p_rm_Vertices);
 			R_CHK(dx10BufferUtils::CreateVertexBuffer(&p_rm_Vertices, data->pointer(), vCount*vStride));
 			HW.stats_manager.increment_stats_vb(p_rm_Vertices);
@@ -174,7 +193,7 @@ void Fvisual::Load(const char* N, IReader* data, u32 dwFlags)
 			iCount = data->r_u32();
 			dwPrimitives = iCount / 3;
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 			//BOOL	bSoft		= HW.Caps.geometry.bSoftware || (dwFlags&VLOAD_FORCESOFTWARE);
 			//u32		dwUsage		= /*D3DUSAGE_WRITEONLY |*/ (bSoft?D3DUSAGE_SOFTWAREPROCESSING:0);	// indices are read in model-wallmarks code
 			//BYTE*	bytes		= 0;

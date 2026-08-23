@@ -85,6 +85,19 @@ void CUILines::SetWordWrap(bool mode)
 }
 
 
+static bool SafeAssignText(shared_str& dest, const char* src)
+{
+	__try
+	{
+		dest = src;
+		return true;
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return false;
+	}
+}
+
 void CUILines::SetText(const char* text)
 {
 	if (!m_pFont)
@@ -92,9 +105,13 @@ void CUILines::SetText(const char* text)
 
 	if (text && text[0] != 0)
 	{
-		if (m_text == text)
+		if (!SafeAssignText(m_text, text))
+		{
+			Msg("! [UI] CUILines::SetText - Access Violation caught while assigning string [0x%p], clearing text", text);
+			m_text = "";
+			Reset();
 			return;
-		m_text = text;
+		}
 		uFlags.set(flNeedReparse, TRUE);
 	}
 	else

@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#ifndef USE_VK
 
 void CRenderTarget::phase_nightvision()
 {
@@ -213,4 +214,5 @@ void CRenderTarget::phase_3DSSReticle()
 
 	RImplementation.render_Reticle();
 };
+#endif
 #endif
