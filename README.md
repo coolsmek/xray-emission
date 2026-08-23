@@ -6,7 +6,7 @@
 - Defaulting to xray-monolith MT engine variant.
 - Verified build and runtime on vanilla S.T.A.L.K.E.R. Anomaly 1.5.3 using "build_DX11AVX.ps1" and "build_VKAVX.ps1" (output to "_build" directory).
 - Includes new 'gamedata_vk' for Vulkan specific gamedata modifications
-  - Use "combine_and_compress_gamedata_to_db.bat" to deploy "00_modded_exes_gamedata.db0" to compressor_output folder (includes merged in gamedata_vk and checks for merge conflicts)
+  - Use "combine_and_compress_gamedata_to_db.bat" to deploy "000_modded_exes_gamedata.db0" to compressor_output folder (includes merged in gamedata_vk and checks for merge conflicts)
 
 --------------------------------------------------------
 

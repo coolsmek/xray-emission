@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 REM ============================================================
 REM  combine_and_compress_gamedata_to_db.bat
 REM  1. Merge gamedata_vk\ into gamedata\ (with conflict handling)
-REM  2. Compress merged gamedata into 00_modded_exes_gamedata.db0
+REM  2. Compress merged gamedata into 000_modded_exes_gamedata.db0
 REM ============================================================
 
 set "ROOT=%~dp0"
@@ -13,7 +13,7 @@ set "OVERLAY_DIR=%ROOT%gamedata_vk"
 set "COMPRESSOR_DIR=%ROOT%compressor"
 set "OUTPUT_DIR=%ROOT%compressor_output"
 set "STAGE_DIR=%COMPRESSOR_DIR%\gamedata"
-set "OUTPUT_NAME=00_modded_exes_gamedata.db0"
+set "OUTPUT_NAME=000_modded_exes_gamedata.db0"
 
 REM Conflict resolution policy for the whole run:
 REM   (empty)   = ask for every conflict
