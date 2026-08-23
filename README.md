@@ -1,3 +1,15 @@
+# STALKER ANOMALY - Vulkan 1.4 Renderer Development
+## Highly experimental development of a new Vulkan 1.4 render layer (xrRenderVK) into the xray-monolith engine.
+- Goal is to integrate the Vulkan renderer while maintaining previously established render layers (DX8, DX9, DX10, DX11) and overall engine architecture.
+- Goal is for AnomalyVKAVX.exe to have performance and rendering features equal to DX11-AVX. Using DX11-AVX as the reference - matching or exceed performance without significant engine or rendering feature changes.
+- Defaulting AVX for Vulkan Renderer executable.
+- Defaulting to xray-monolith MT engine variant.
+- Verified build and runtime on vanilla S.T.A.L.K.E.R. Anomaly 1.5.3 using "build_DX11AVX.ps1" and "build_VKAVX.ps1" (output to "_build" directory).
+- Includes new 'gamedata_vk' for Vulkan specific gamedata modifications
+  - Use "combine_and_compress_gamedata_to_db.bat" to deploy "00_modded_exes_gamedata.db0" to compressor_output folder (includes merged in gamedata_vk and checks for merge conflicts)
+
+--------------------------------------------------------
+
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/themrdemonized/xray-monolith)
 
 # STALKER-Anomaly-modded-exes
