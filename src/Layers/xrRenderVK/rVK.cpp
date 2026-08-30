@@ -189,10 +189,17 @@ void CRender::render_forward()
 
     RImplementation.o.distortion = FALSE; // disable distorion
 
-    static int s_frameCount = 0;
-    if (++s_frameCount % 25 == 0) {
-        Msg("VK_PERF: G-Buffer Generation (render_forward) CPU Time: %.2f ms", s_timer.GetElapsed_sec() * 1000.0f);
+#ifdef VK_ENABLE_TESTS
+    if (strstr(Core.Params, "-vkdebug"))
+    {
+        static int s_frameCount = 0;
+        if (++s_frameCount % 25 == 0)
+        {
+            Msg("VK_PERF: G-Buffer Generation (render_forward) CPU Time: %.2f ms", s_timer.GetElapsed_sec() * 1000.0f);
+        }
     }
+#endif
+
 }
 
 // ── render_smap_direct — shadow map pass stub ────────────────────────────────

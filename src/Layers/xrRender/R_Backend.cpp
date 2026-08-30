@@ -134,7 +134,9 @@ void CBackend::CreateQuadIB()
 // Device dependance
 void CBackend::OnDeviceCreate()
 {
+#ifdef VK_ENABLE_TESTS
 	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CBackend::OnDeviceCreate: entering CreateQuadIB"); xrLogger::FlushLog(); }
+#endif
 	CreateQuadIB();
 
 #if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
@@ -145,22 +147,31 @@ void CBackend::OnDeviceCreate()
     extern VkRecordContext g_vkPrimaryContext;
     m_ctx = &g_vkPrimaryContext;
 #endif
-
+#ifdef VK_ENABLE_TESTS
 	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CBackend::OnDeviceCreate: entering Vertex.Create"); xrLogger::FlushLog(); }
+#endif
 	// streams
 	Vertex.Create();
 	
+#ifdef VK_ENABLE_TESTS	
 	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CBackend::OnDeviceCreate: entering Index.Create"); xrLogger::FlushLog(); }
+#endif
 	Index.Create();
 
+#ifdef VK_ENABLE_TESTS
 	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CBackend::OnDeviceCreate: entering InitDebugDraw"); xrLogger::FlushLog(); }
+#endif
 	InitDebugDraw();
 
+#ifdef VK_ENABLE_TESTS	
 	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CBackend::OnDeviceCreate: entering Invalidate"); xrLogger::FlushLog(); }
+#endif	
 	// invalidate caching
 	Invalidate();
 
+#ifdef VK_ENABLE_TESTS
 	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CBackend::OnDeviceCreate: done"); xrLogger::FlushLog(); }
+#endif
 }
 
 void CBackend::OnDeviceDestroy()

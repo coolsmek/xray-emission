@@ -4,7 +4,9 @@
 #include "Managers/vk_DescriptorManager.h"
 #include "Resources/vk_BufferUtils.h"
 #include "Resources/vk_TextureUtils.h"
+#ifdef VK_ENABLE_TESTS
 #include "Tests/Layer4_Validation/vk_DebugMessenger.h"
+#endif
 
 #ifndef CHK_VK
 #define CHK_VK(expr) do { VkResult res = (expr); R_ASSERT3(res == VK_SUCCESS, "Vulkan error in vk_HW.cpp", #expr); } while(0)
@@ -98,6 +100,7 @@ void CHW::CreateD3D()
     vf.enabledValidationFeatureCount = _countof(enables);
     vf.pEnabledValidationFeatures    = enables;
 
+#ifdef VK_ENABLE_TESTS
     if (strstr(Core.Params, "-vkdebug"))
     {
         xrLogger::SetImmediateMode(true);
@@ -105,6 +108,7 @@ void CHW::CreateD3D()
         instanceExtensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
         g_bVulkanDebugLog = true;
     }
+#endif
 
     VkInstanceCreateInfo ci{};
     ci.sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -114,10 +118,12 @@ void CHW::CreateD3D()
     ci.enabledLayerCount       = (uint32_t)instanceLayers.size();
     ci.ppEnabledLayerNames     = instanceLayers.data();
 
+#ifdef VK_ENABLE_TESTS
     if (strstr(Core.Params, "-vkdebug"))
     {
         ci.pNext = &vf;
     }
+#endif
 
     VkResult res = vkCreateInstance(&ci, nullptr, &m_vkInstance);
     R_ASSERT2(res == VK_SUCCESS, "CHW::CreateD3D — vkCreateInstance failed");
@@ -132,21 +138,25 @@ void CHW::CreateD3D()
         g_vkSetDebugUtilsObjectNameEXT  = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(m_vkInstance, "vkSetDebugUtilsObjectNameEXT");
     }
 
+#ifdef VK_ENABLE_TESTS
     if (strstr(Core.Params, "-vkdebug"))
     {
         m_vkDebugMessenger = vk_CreateDebugMessenger(m_vkInstance);
     }
+#endif
 }
 
 // ─── DestroyD3D ──────────────────────────────────────────────────────────────
 
 void CHW::DestroyD3D()
 {
+#ifdef VK_ENABLE_TESTS
     if (m_vkDebugMessenger != VK_NULL_HANDLE)
     {
         vk_DestroyDebugMessenger(m_vkInstance, m_vkDebugMessenger);
         m_vkDebugMessenger = VK_NULL_HANDLE;
     }
+#endif
 
     if (m_vkInstance != VK_NULL_HANDLE)
     {

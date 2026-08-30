@@ -64,39 +64,46 @@ void vkFontRender::OnRender(CGameFont& owner)
         {
             // Log surface state BEFORE calling get_Width/Height
             ID3DBaseTexture* surf = pFontTexture->surface_get();
-            Msg("VK FONT MEDIUM fsValid attempt: pSurface=%p bLoaded=%d bLoading=%d",
+#ifdef VK_ENABLE_TESTS
+			Msg("VK FONT MEDIUM fsValid attempt: pSurface=%p bLoaded=%d bLoading=%d",
                 (void*)surf,
                 (int)pFontTexture->flags.bLoaded,
                 (int)pFontTexture->flags.bLoading);
+#endif
             if (surf) surf->Release(); // surface_get does AddRef
 
             texW = pFontTexture->get_Width();
             texH = pFontTexture->get_Height();
-
+#ifdef VK_ENABLE_TESTS
             Msg("VK FONT MEDIUM get_Width/Height returned: texW=%u texH=%u", texW, texH);
+#endif
         }
+#ifdef VK_ENABLE_TESTS
         else
         {
             Msg("VK FONT MEDIUM pFontTexture is NULL — not yet created");
         }
-
+#endif
         if (texW > 0 && texH > 0)
         {
             owner.vTS.set((int)texW, (int)texH);
             owner.fTCHeight = owner.fHeight / float(owner.vTS.y);
             owner.uFlags |= CGameFont::fsValid;  // only cache when we have real dims
-            Msg("VK FONT MEDIUM fsValid SET: vTS=(%d,%d) fTCHeight=%.4f fHeight=%.2f",
+#ifdef VK_ENABLE_TESTS
+			Msg("VK FONT MEDIUM fsValid SET: vTS=(%d,%d) fTCHeight=%.4f fHeight=%.2f",
                 (int)owner.vTS.x, (int)owner.vTS.y, owner.fTCHeight, owner.fHeight);
+#endif
         }
+#ifdef VK_ENABLE_TESTS
         else
         {
             Msg("VK FONT MEDIUM fsValid NOT set this frame (texW=%u texH=%u) — will retry", texW, texH);
         }
-
+#endif
         // If texture isn't loaded yet, do NOT set fsValid — retry next frame
     }
 
-
+//commented out - if (!s_uvLogged...
     /*bool s_uvLogged = false;
     if (!s_uvLogged && (owner.uFlags & CGameFont::fsValid) && !owner.strings.empty())
     {
@@ -117,6 +124,7 @@ void vkFontRender::OnRender(CGameFont& owner)
         }
     }*/
 
+#ifdef VK_ENABLE_TESTS
     // --- TEXTURE VERIFICATION LOG (per-instance, remove after diagnosis) ---
     if (!m_texVerified && (owner.uFlags & CGameFont::fsValid)) {
         m_texVerified = true;
@@ -132,6 +140,7 @@ void vkFontRender::OnRender(CGameFont& owner)
             activeT ? activeT->get_Height() : 0u);
     }
     // --- END TEXTURE VERIFICATION LOG ---
+#endif
 
 	for (u32 i = 0; i < owner.strings.size();)
 	{

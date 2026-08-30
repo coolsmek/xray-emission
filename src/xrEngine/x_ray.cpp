@@ -645,16 +645,24 @@ void Startup()
 	// Initialize APP
 	Device.Create();
 
+#ifdef VK_ENABLE_TESTS	
 	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG x_ray.cpp: Device.Create() finished. entering LALib.OnCreate()"); xrLogger::FlushLog(); }
+#endif	
 	LALib.OnCreate();
 	
+#ifdef VK_ENABLE_TESTS	
 	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG x_ray.cpp: entering pApp = xr_new<CApplication>()"); xrLogger::FlushLog(); }
+#endif	
 	pApp = xr_new<CApplication>();
 	
+#ifdef VK_ENABLE_TESTS	
 	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG x_ray.cpp: entering NEW_INSTANCE(CLSID_GAME_PERSISTANT)"); xrLogger::FlushLog(); }
+#endif	
 	g_pGamePersistent = (IGame_Persistent*)NEW_INSTANCE(CLSID_GAME_PERSISTANT);
 	
+#ifdef VK_ENABLE_TESTS	
 	if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG x_ray.cpp: allocating ISpatial_DBs"); xrLogger::FlushLog(); }
+#endif	
 	g_SpatialSpace = xr_new<ISpatial_DB>();
 	g_SpatialSpacePhysic = xr_new<ISpatial_DB>();
 	g_SpatialSpaceLights = xr_new<ISpatial_DB>();

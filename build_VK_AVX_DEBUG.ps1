@@ -16,16 +16,19 @@ if (-not $MSBuild) {
 
 Write-Host "Found MSBuild at: $MSBuild"
 Write-Host ""
-Write-Host "Building full Vulkan-AVX game executable..."
+Write-Host "Building Vulkan game executable with VERIFIED (Debug) renderer..."
 Write-Host "   xrEngine      > ReleaseVK-AVX|x64  (AnomalyVKAVX.exe, optimized)"
-Write-Host "   xrRenderVK    > Release-AVX|x64    (optimized, VK_ENABLE_TESTS inactive)"
+Write-Host "   xrRenderVK    > VerifiedVK|x64     (debug renderer, VK_ENABLE_TESTS active)"
 Write-Host "   All other libs > Release-AVX|x64"
 Write-Host ""
 
-# Run MSBuild and track if any errors occur
 $buildFailed = $false
 
-& $MSBuild src\engine-vs2022.sln /p:Configuration="Vulkan-AVX" /p:Platform=x64 /m /v:minimal 2>&1 | ForEach-Object {
+$slnPath = "src\engine-vs2022.sln"
+$slnAbs = (Resolve-Path $slnPath).Path
+
+Write-Host "Building full Vulkan-AVX solution (with VerifiedVK renderer) using native Vulkan-AVX-Debug config..." -ForegroundColor Cyan
+& $MSBuild $slnAbs /p:Configuration="Vulkan-AVX-Debug" /p:Platform=x64 /m /v:minimal 2>&1 | ForEach-Object {
     $line = $_.ToString()
     if ($line -match 'error\s[A-Z]\d+') {
         Write-Host $line -ForegroundColor Red
@@ -39,7 +42,7 @@ $buildFailed = $false
     }
 }
 
-# Check if MSBuild failed or if our filter caught an error string
+
 if ($LASTEXITCODE -ne 0 -or $buildFailed) {
     Write-Host ""
     Write-Host "----------------------------------------" -ForegroundColor Red
@@ -63,7 +66,7 @@ else {
         Write-Host "Warning: Compiled executable not found at expected path: $sourceExe" -ForegroundColor Yellow
     }
 
-    # Ensure shaderc_shared.dll is present alongside the output exe
+    # Ensure shaderc_shared.dll is present
     $destPath = Join-Path (Resolve-Path $outputDir) "shaderc_shared.dll"
     if (Test-Path $destPath) {
         Write-Host "shaderc_shared.dll already present in $outputDir"

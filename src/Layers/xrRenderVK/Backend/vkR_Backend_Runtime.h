@@ -784,10 +784,12 @@ IC void vk_FlushDescriptors(VkCommandBuffer cmd)
             bDirtyPush = true;
             
             static u32 log_count = 0;
+#ifdef VK_ENABLE_TESTS
             if (log_count < 100) {
                 if (cbRef) Msg("VK DEBUG: cbuffer offset changed for binding %u, range %u", bindingIdx, range);
                 log_count++;
             }
+#endif
         }
 
         hash_combine(range);

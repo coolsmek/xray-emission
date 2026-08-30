@@ -85,9 +85,13 @@ void CRT::create(LPCSTR Name, u32 w, u32 h, D3DFORMAT f, u32 SampleCount, bool u
     imageInfo.samples = (VkSampleCountFlagBits)SampleCount;
 
     VkImage vkImage;
+#ifdef VK_ENABLE_TESTS
     if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRT::create: calling vkCreateImage"); xrLogger::FlushLog(); }
+#endif
     CHK_VK(vkCreateImage(HW.m_vkDevice, &imageInfo, nullptr, &vkImage));
+#ifdef VK_ENABLE_TESTS
     if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRT::create: vkCreateImage success"); xrLogger::FlushLog(); }
+#endif
 
     VkMemoryRequirements memReqs;
     vkGetImageMemoryRequirements(HW.m_vkDevice, vkImage, &memReqs);
@@ -98,13 +102,19 @@ void CRT::create(LPCSTR Name, u32 w, u32 h, D3DFORMAT f, u32 SampleCount, bool u
     allocInfo.memoryTypeIndex = HW.vk_FindMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     VkDeviceMemory vkMemory;
+#ifdef VK_ENABLE_TESTS
     if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRT::create: calling vkAllocateMemory"); xrLogger::FlushLog(); }
+#endif
     CHK_VK(vkAllocateMemory(HW.m_vkDevice, &allocInfo, nullptr, &vkMemory));
+#ifdef VK_ENABLE_TESTS
     if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRT::create: vkAllocateMemory success"); xrLogger::FlushLog(); }
 
     if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRT::create: calling vkBindImageMemory"); xrLogger::FlushLog(); }
+#endif
     CHK_VK(vkBindImageMemory(HW.m_vkDevice, vkImage, vkMemory, 0));
+#ifdef VK_ENABLE_TESTS
     if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRT::create: vkBindImageMemory success"); xrLogger::FlushLog(); }
+#endif
 
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -126,9 +136,13 @@ void CRT::create(LPCSTR Name, u32 w, u32 h, D3DFORMAT f, u32 SampleCount, bool u
     viewInfo.subresourceRange.layerCount = 1;
 
     VkImageView vkView;
+#ifdef VK_ENABLE_TESTS
     if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRT::create: calling vkCreateImageView"); xrLogger::FlushLog(); }
+#endif
     CHK_VK(vkCreateImageView(HW.m_vkDevice, &viewInfo, nullptr, &vkView));
+#ifdef VK_ENABLE_TESTS
     if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRT::create: vkCreateImageView success"); xrLogger::FlushLog(); }
+#endif
 
     string128 rtImgName, rtViewName;
     xr_sprintf(rtImgName, "RT Image: %s", Name);
@@ -197,13 +211,19 @@ void CRT::create(LPCSTR Name, u32 w, u32 h, D3DFORMAT f, u32 SampleCount, bool u
         }
     }
 
+#ifdef VK_ENABLE_TESTS
     if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRT::create: calling DEV->_CreateTexture(%s)", Name); xrLogger::FlushLog(); }
+#endif
     pTexture = DEV->_CreateTexture(Name);
 
+#ifdef VK_ENABLE_TESTS
     if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRT::create: returned from DEV->_CreateTexture"); xrLogger::FlushLog(); }
+#endif
     pTexture->surface_set(pSurface);
 
+#ifdef VK_ENABLE_TESTS
     if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CRT::create: done"); xrLogger::FlushLog(); }
+#endif
 }
 
 void CRT::destroy()

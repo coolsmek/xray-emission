@@ -303,8 +303,10 @@ void CTexture::Load()
 	{
 		// Check for OGM
 		string_path fn;
-        if (strstr(Core.Params, "-vkdebug"))
+#ifdef VK_ENABLE_TESTS
+		if (strstr(Core.Params, "-vkdebug"))
             Msg("VK DEBUG CTexture::Load - Checking OGM for: %s", *cName);
+#endif
 		if (FS.exist(fn, "$game_textures$", *cName, ".ogm"))
 		{
 			// AVI
@@ -341,8 +343,10 @@ void CTexture::Load()
 			}
 		}
 		else {
-            if (strstr(Core.Params, "-vkdebug"))
+#ifdef VK_ENABLE_TESTS
+			if (strstr(Core.Params, "-vkdebug"))
                 Msg("VK DEBUG CTexture::Load - Checking AVI for: %s", *cName);
+#endif
             if (FS.exist(fn, "$game_textures$", *cName, ".avi"))
             {
                 // AVI
@@ -372,8 +376,10 @@ void CTexture::Load()
                 }
             }
             else {
-                if (strstr(Core.Params, "-vkdebug"))
-                    Msg("VK DEBUG CTexture::Load - Checking SEQ for: %s", *cName);
+#ifdef VK_ENABLE_TESTS
+				if (strstr(Core.Params, "-vkdebug"))
+                    Msg("VK DEBUG CTexture::Load - Checking SEQ for: %s", *cName); 
+#endif
                 if (FS.exist(fn, "$game_textures$", *cName, ".seq"))
                 {
 			// Sequence
