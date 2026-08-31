@@ -35,6 +35,13 @@ extern ENGINE_API Fvector2 g_current_font_scale;
 void vkFontRender::OnRender(CGameFont& owner)
 {
 	VERIFY(g_bRendering);
+
+	// Lazy-init geometry if it was created before RCache.Vertex.Buffer() was valid
+	if (!pGeom || !pGeom->vb)
+	{
+		pGeom.create(FVF::F_TL, RCache.Vertex.Buffer(), RCache.QuadIB);
+	}
+
 	if (pShader) {
 	    RCache.set_Shader(pShader);
 

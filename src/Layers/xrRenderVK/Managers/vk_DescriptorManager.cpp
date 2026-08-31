@@ -9,7 +9,7 @@ vk_DescriptorManager::vk_DescriptorManager()
     , m_currentFrameIndex(0)
     , m_dynamicAlignment(256)
     , m_currentBufferOffset(0)
-    , m_maxBufferSize(1024 * 1024 * 16) // 16 MB per frame for constants
+    , m_maxBufferSize(1024 * 1024 * 64) // 64 MB per frame for constants
 {
     for (uint32_t i = 0; i < VK_MAX_FRAMES_IN_FLIGHT; ++i)
     {
@@ -79,6 +79,8 @@ void vk_DescriptorManager::CreateDescriptorPools()
 
 void vk_DescriptorManager::CreateDynamicUniformBuffers(VkPhysicalDevice physDevice)
 {
+    m_maxBufferSize = 1024 * 1024 * 64; // 64MB
+
     // Query alignment requirement from physical device
     VkPhysicalDeviceProperties props;
     vkGetPhysicalDeviceProperties(physDevice, &props);

@@ -59,12 +59,16 @@ void cvkUIRender::FlushPrimitive()
     switch (m_PointType)
     {
     case pttLIT:
+        if (!hGeom_LIT || !hGeom_LIT->vb)
+            CreateUIGeom();
         p_cnt = LIT_pv - LIT_start_pv;
         VERIFY(u32(p_cnt) <= m_iMaxVerts);
         RCache.Vertex.Unlock(u32(p_cnt), hGeom_LIT.stride());
         RCache.set_Geometry(hGeom_LIT);
         break;
     case pttTL:
+        if (!hGeom_TL || !hGeom_TL->vb)
+            CreateUIGeom();
         p_cnt = TL_pv - TL_start_pv;
         VERIFY(u32(p_cnt) <= m_iMaxVerts);
         RCache.Vertex.Unlock(u32(p_cnt), hGeom_TL.stride());

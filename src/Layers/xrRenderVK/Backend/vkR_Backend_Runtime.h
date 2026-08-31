@@ -11,7 +11,7 @@ struct VkRecordContext {
 
     struct DescriptorCache {
         VkPipelineLayout layout = VK_NULL_HANDLE;
-        u32 cbvOffsets[28] = { 0 };
+        u32 cbvOffsets[128] = { 0 };
         VkImageView views[128] = { VK_NULL_HANDLE };
         VkSampler samplers[128] = { VK_NULL_HANDLE };
     } s_cache;
@@ -25,6 +25,7 @@ struct VkRecordContext {
     const vk_PipelineCacheManager::PipelineEntry* m_lastBoundEntry = nullptr;
     VkPipelineLayout m_lastBoundLayout = VK_NULL_HANDLE;
     VkPipeline m_dsLastPipeline = VK_NULL_HANDLE;
+    bool m_renderPassDirty = false;
 
     u32 m_dsCull = 0;
     u32 m_dsDepthTest = 0, m_dsDepthWrite = 0, m_dsDepthCmp = 0;
@@ -138,6 +139,7 @@ IC void CBackend::set_RT(ID3DRenderTargetView* RT, u32 ID)
         pRT[ID] = RT;
 #if defined(USE_VK)
         m_ctx->m_pipelineDirty = true;
+        m_ctx->m_renderPassDirty = true;
 #endif
     }
 }
@@ -151,6 +153,7 @@ IC void CBackend::set_ZB(ID3DDepthStencilView* ZB)
         m_ctx->pZB = ZB;
 #if defined(USE_VK)
         m_ctx->m_pipelineDirty = true;
+        m_ctx->m_renderPassDirty = true;
 #endif
     }
 }
@@ -158,6 +161,13 @@ IC void CBackend::set_ZB(ID3DDepthStencilView* ZB)
 ICF VkCommandBuffer CBackend::GetActiveCommandBuffer() const
 {
     return m_ctx->m_activeCmdBuffer;
+}
+
+ICF bool CBackend::CheckAndResetRenderPassDirty()
+{
+    bool dirty = m_ctx->m_renderPassDirty;
+    m_ctx->m_renderPassDirty = false;
+    return dirty;
 }
 
 ICF u32 CBackend::GetCurrentImageIndex() const
@@ -334,11 +344,17 @@ IC void CBackend::set_Constants(R_constant_table* C)
 {
     if (m_ctx->ctable == C) return;
     m_ctx->ctable = C;
-    ctable = C;              // ← keep the bare member in sync; get_c() reads this
-    xforms.unmap();
-    hemi.unmap();
-    tree.unmap();
-    if (!C) { ctable = nullptr; return; }
+    m_ctx->xforms.unmap();
+    
+    if (m_ctx == &g_vkPrimaryContext) {
+        ctable = C;              // ← keep the bare member in sync; get_c() reads this
+        hemi.unmap();
+        tree.unmap();
+    }
+    if (!C) {
+        if (m_ctx == &g_vkPrimaryContext) ctable = nullptr;
+        return;
+    }
 
     PGO(Msg("PGO:c-table"));
 
@@ -684,6 +700,10 @@ IC void vk_FlushDescriptors(VkCommandBuffer cmd)
         dirtyReasonStr = "LAYOUT_CHANGED";
     }
 
+    if (layoutChanged) {
+        bDirtyPush = true;
+    }
+
     if (!s_pNullTexture) {
         vkRenderDeviceRender* devRender = (vkRenderDeviceRender*)Device.m_pRender;
         if (devRender && devRender->Resources) {
@@ -743,8 +763,15 @@ IC void vk_FlushDescriptors(VkCommandBuffer cmd)
 
     // ── 2. Hash & Cache Preparation ───────────────────────────────────────────
     const auto& entry = PipelineCache.GetLastBoundEntry(ctx);
-    uint64_t hash = 14695981039346656037ULL;
-    auto hash_combine = [&](uint64_t val) { hash ^= val; hash *= 1099511628211ULL; };
+    uint64_t hash = 0;
+    auto hash_combine = [&](uint64_t val) {
+        val ^= val >> 30;
+        val *= 0xbf58476d1ce4e5b9ULL;
+        val ^= val >> 27;
+        val *= 0x94d049bb133111ebULL;
+        val ^= val >> 31;
+        hash ^= val + 0x9e3779b97f4a7c15ULL + (hash << 6) + (hash >> 2);
+    };
 
     VkBuffer dynBuf = DescriptorManager.GetCurrentDynamicBuffer();
     hash_combine((uint64_t)layout);

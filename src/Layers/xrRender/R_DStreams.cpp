@@ -48,6 +48,11 @@ void _VertexStream::Destroy()
 	_clear();
 }
 
+void _VertexStream::Flush()
+{
+	mPosition = mFrameBase + mFrameRegionSize;
+}
+
 void* _VertexStream::Lock(u32 vl_Count, u32 Stride, u32& vOffset)
 {
 #ifdef USE_DX11
@@ -205,6 +210,11 @@ void _IndexStream::Destroy()
 	HW.stats_manager.decrement_stats_ib(pIB);
 	_RELEASE(pIB);
 	_clear();
+}
+
+void _IndexStream::Flush()
+{
+	mPosition = mFrameBase + mFrameRegionSize;
 }
 
 u16* _IndexStream::Lock(u32 Count, u32& vOffset)

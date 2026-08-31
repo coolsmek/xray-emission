@@ -91,37 +91,67 @@ IC void R_xforms::set_c_wvp_prev(R_constant* C)
 
 IC void CBackend::set_xform_world(const Fmatrix& _M)
 {
+#if defined(USE_VK)
+	m_ctx->xforms.set_W(_M);
+#else
 	xforms.set_W(_M);
+#endif
 }
 
 IC void CBackend::set_xform_view(const Fmatrix& _M)
 {
+#if defined(USE_VK)
+	m_ctx->xforms.set_V(_M);
+#else
 	xforms.set_V(_M);
+#endif
 }
 
 IC void CBackend::set_xform_project(const Fmatrix& _M)
 {
+#if defined(USE_VK)
+	m_ctx->xforms.set_P(_M);
+#else
 	xforms.set_P(_M);
+#endif
 }
 
 IC void CBackend::set_xform_world_prev(const Fmatrix& _M)
 {
+#if defined(USE_VK)
+	m_ctx->xforms.set_W_prev(_M);
+#else
 	xforms.set_W_prev(_M);
+#endif
 }
 
 IC void CBackend::set_xform_view_prev(const Fmatrix& _M)
 {
+#if defined(USE_VK)
+	m_ctx->xforms.set_V_prev(_M);
+#else
 	xforms.set_V_prev(_M);
+#endif
 }
 
 IC void CBackend::set_xform_project_prev(const Fmatrix& _M)
 {
+#if defined(USE_VK)
+	m_ctx->xforms.set_P_prev(_M);
+#else
 	xforms.set_P_prev(_M);
+#endif
 }
 
+#if defined(USE_VK)
+IC const Fmatrix& CBackend::get_xform_world() { return m_ctx->xforms.get_W(); }
+IC const Fmatrix& CBackend::get_xform_view() { return m_ctx->xforms.get_V(); }
+IC const Fmatrix& CBackend::get_xform_project() { return m_ctx->xforms.get_P(); }
+#else
 IC const Fmatrix& CBackend::get_xform_world() { return xforms.get_W(); }
 IC const Fmatrix& CBackend::get_xform_view() { return xforms.get_V(); }
 IC const Fmatrix& CBackend::get_xform_project() { return xforms.get_P(); }
+#endif
 
 IC ID3DRenderTargetView* CBackend::get_RT(u32 ID)
 {

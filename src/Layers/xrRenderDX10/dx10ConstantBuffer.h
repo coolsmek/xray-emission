@@ -16,6 +16,8 @@ public:
 
 	bool Similar(dx10ConstantBuffer& _in);
 	ID3DBuffer* GetBuffer() { return m_pBuffer; }
+	//review: outside a USE_VK wrapper?
+	const shared_str& GetBufferName() const { return m_strBufferName; }
 
 	void Flush();
 

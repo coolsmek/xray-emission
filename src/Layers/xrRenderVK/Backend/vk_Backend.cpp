@@ -6,6 +6,7 @@ The inline drawing logic has been moved to vkR_Backend_Runtime.h to integrate wi
 
 // Note: No local CBackend vk_Backend instantiation here anymore.
 // The engine instantiates 'CBackend RCache;' globally in R_Backend.cpp.
+thread_local VkRecordContext* CBackend::m_ctx = &g_vkPrimaryContext;
 
 void CBackend::OnFrameBegin(VkCommandBuffer cmdBuffer, u32 imageIndex)
 {

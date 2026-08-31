@@ -340,6 +340,10 @@ void CRenderTarget::u_setrt(u32 W, u32 H, ID3DRenderTargetView* _1, ID3DRenderTa
 
     m_bRenderingPassActive     = true;
     m_activeRendertargetsCount = rtCount;
+
+    // Clear the dirty flag so vk_EnsureRenderPassActive doesn't immediately 
+    // kill this explicitly crafted pass on the next draw call.
+    RCache.CheckAndResetRenderPassDirty();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1042,14 +1046,15 @@ void vk_EnsureRenderPassActive(VkCommandBuffer cmd)
     if (!render || !render->Target)
         return;
 
-    if (HW.HasPendingTransfers())
+    if (HW.HasPendingTransfers() || RCache.CheckAndResetRenderPassDirty())
     {
         if (render->Target->m_bRenderingPassActive)
         {
             vkCmdEndRendering(cmd);
             render->Target->m_bRenderingPassActive = false;
         }
-        HW.FlushDeferredTransfers();
+        if (HW.HasPendingTransfers())
+            HW.FlushDeferredTransfers();
     }
 
     if (render->Target->m_bRenderingPassActive)

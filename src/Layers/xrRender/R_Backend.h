@@ -69,7 +69,7 @@ class ECORE_API CBackend
     // to the otherwise-private Invalidate() instead of making it public globally.
     friend class CRenderTarget;
 public:
-    VkRecordContext* m_ctx;
+    static thread_local VkRecordContext* m_ctx;
 #endif
 public:
 #if defined(USE_VK)
@@ -159,6 +159,7 @@ public:
 	void SetVertexStream(u32 streamSlot, VkBufferWrapper* buf, VkDeviceSize offset, u32 stride);
 	void SetIndexStream(VkBuffer buffer, VkDeviceSize offset, VkIndexType indexType);
 	VkCommandBuffer GetActiveCommandBuffer() const;
+    bool CheckAndResetRenderPassDirty();
     u32 GetCurrentImageIndex() const;
 #endif
 

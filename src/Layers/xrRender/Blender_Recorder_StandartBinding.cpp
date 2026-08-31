@@ -16,9 +16,15 @@
 #include "dxRenderDeviceRender.h"
 
 // matrices
+#if defined(USE_VK)
+#define	BIND_DECLARE(xf)	\
+class cl_xform_##xf	: public R_constant_setup {	virtual void setup (R_constant* C) { RCache.m_ctx->xforms.set_c_##xf (C); } }; \
+	static cl_xform_##xf	binder_##xf
+#else
 #define	BIND_DECLARE(xf)	\
 class cl_xform_##xf	: public R_constant_setup {	virtual void setup (R_constant* C) { RCache.xforms.set_c_##xf (C); } }; \
 	static cl_xform_##xf	binder_##xf
+#endif
 BIND_DECLARE(w);
 BIND_DECLARE(invw);
 BIND_DECLARE(v);
@@ -73,7 +79,7 @@ class cl_texgen : public R_constant_setup
 	{
 		Fmatrix mTexgen;
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 		Fmatrix mTexelAdjust =
 		{
 			0.5f, 0.0f, 0.0f, 0.0f,
@@ -95,7 +101,11 @@ class cl_texgen : public R_constant_setup
 		};
 #endif	//	USE_DX10
 
+#if defined(USE_VK)
+		mTexgen.mul(mTexelAdjust, RCache.m_ctx->xforms.m_wvp);
+#else
 		mTexgen.mul(mTexelAdjust, RCache.xforms.m_wvp);
+#endif
 
 		RCache.set_c(C, mTexgen);
 	}
@@ -109,7 +119,7 @@ class cl_VPtexgen : public R_constant_setup
 	{
 		Fmatrix mTexgen;
 
-#if defined(USE_DX10) || defined(USE_DX11)
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 		Fmatrix mTexelAdjust =
 		{
 			0.5f, 0.0f, 0.0f, 0.0f,
@@ -131,7 +141,11 @@ class cl_VPtexgen : public R_constant_setup
 		};
 #endif	//	USE_DX10
 
+#if defined(USE_VK)
+		mTexgen.mul(mTexelAdjust, RCache.m_ctx->xforms.m_vp);
+#else
 		mTexgen.mul(mTexelAdjust, RCache.xforms.m_vp);
+#endif
 
 		RCache.set_c(C, mTexgen);
 	}

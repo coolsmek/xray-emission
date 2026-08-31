@@ -18,6 +18,11 @@ private :
 	// Per-frame-slot sub-range (Option A, VK ring isolation)
 	u32 mFrameBase;       // byte offset of current frame's region
 	u32 mFrameRegionSize; // bytes per frame region
+	
+	// Instrumentation for -vk_dvb_stats
+	u32 mPeakUsage;
+	u32 mWrapCountThisFrame;
+	u32 mCallIndexThisFrame; // NEW: increments once per Lock() call, reset each frame
 public:
 	ID3DVertexBuffer* old_pVB;
 #ifdef DEBUG
@@ -37,7 +42,7 @@ public:
 
 	IC ID3DVertexBuffer* Buffer() { return pVB; }
 	IC u32 DiscardID() { return mDiscardID; }
-	IC void Flush() { mPosition = mFrameBase + mFrameRegionSize; }
+	void Flush();
 
 	void* Lock(u32 vl_Count, u32 Stride, u32& vOffset);
 	void Unlock(u32 Count, u32 Stride);
@@ -57,6 +62,11 @@ private :
 	// Per-frame-slot sub-range (Option A, VK ring isolation)
 	u32 mFrameBase;
 	u32 mFrameRegionSize;
+	
+	// Instrumentation for -vk_dvb_stats
+	u32 mPeakUsage;
+	u32 mWrapCountThisFrame;
+	u32 mCallIndexThisFrame; // NEW
 public:
 	ID3DIndexBuffer* old_pIB;
 private:
@@ -68,6 +78,9 @@ private:
 		mDiscardID = 0;
 		mFrameBase = 0;
 		mFrameRegionSize = 0;
+		mPeakUsage = 0;
+		mWrapCountThisFrame = 0;
+		mCallIndexThisFrame = 0; // NEW
 	}
 
 public:
@@ -81,7 +94,7 @@ public:
 
 	IC ID3DIndexBuffer* Buffer() { return pIB; }
 	IC u32 DiscardID() { return mDiscardID; }
-	void Flush() { mPosition = mFrameBase + mFrameRegionSize; }
+	void Flush();
 
 	u16* Lock(u32 Count, u32& vOffset);
 	void Unlock(u32 RealCount);

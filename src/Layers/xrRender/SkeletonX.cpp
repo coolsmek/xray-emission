@@ -72,7 +72,11 @@ void CSkeletonX::_Render(ref_geom& hGeom, u32 vCount, u32 iOffset, u32 pCount)
 
 			// Save prev m_W and save current m_W for the next frame
 			Parent->Matrix_Prev.set(Parent->Matrix_Temp);
+#if defined(USE_VK)
+			Parent->Matrix_Temp.set(RCache.m_ctx->xforms.m_w);
+#else
 			Parent->Matrix_Temp.set(RCache.xforms.m_w);
+#endif
 
 			// Save bone matrix to use in the next frame
 			for (u16 b = 0; b < Parent->LL_BoneCount(); b++)
@@ -89,6 +93,16 @@ void CSkeletonX::_Render(ref_geom& hGeom, u32 vCount, u32 iOffset, u32 pCount)
 			// RM_SINGLE
 			Fmatrix Bone_Prev;
 			Bone_Prev.mul_43(Parent->Matrix_Prev, Parent->LL_GetBoneInstance(u16(RMS_boneid)).mRenderTransform_prev);
+#if defined(USE_VK)
+			p_WV.mul_43(RCache.m_ctx->xforms.m_v_prev, Bone_Prev);
+			p_WVP.mul(RCache.m_ctx->xforms.m_p_prev, p_WV);
+		}
+		else
+		{
+			// RM_SKINNING_1B ~ RM_SKINNING_4B
+			p_WV.mul_43(RCache.m_ctx->xforms.m_v_prev, Parent->Matrix_Prev);
+			p_WVP.mul(RCache.m_ctx->xforms.m_p_prev, p_WV);
+#else
 			p_WV.mul_43(RCache.xforms.m_v_prev, Bone_Prev);
 			p_WVP.mul(RCache.xforms.m_p_prev, p_WV);
 		}
@@ -97,6 +111,7 @@ void CSkeletonX::_Render(ref_geom& hGeom, u32 vCount, u32 iOffset, u32 pCount)
 			// RM_SKINNING_1B ~ RM_SKINNING_4B
 			p_WV.mul_43(RCache.xforms.m_v_prev, Parent->Matrix_Prev);
 			p_WVP.mul(RCache.xforms.m_p_prev, p_WV);
+#endif
 		}
 
 		RCache.set_c("m_wvp_prev", p_WVP); // Apply prev matrix
@@ -114,7 +129,11 @@ void CSkeletonX::_Render(ref_geom& hGeom, u32 vCount, u32 iOffset, u32 pCount)
 		{
 			PROF_EVENT("RM_SINGLE");
 			Fmatrix W;
+#if defined(USE_VK)
+			W.mul_43(RCache.m_ctx->xforms.m_w, Parent->LL_GetTransform_R(u16(RMS_boneid)));
+#else
 			W.mul_43(RCache.xforms.m_w, Parent->LL_GetTransform_R(u16(RMS_boneid)));
+#endif
 			RCache.set_xform_world(W);
 			//
 			RCache.set_Geometry(hGeom);

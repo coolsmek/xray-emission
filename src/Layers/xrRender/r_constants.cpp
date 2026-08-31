@@ -298,5 +298,14 @@ BOOL R_constant_table::equal(R_constant_table& C)
 		if (!table[it]->equal(&*C.table[it])) return FALSE;
 	}
 
+	//review: does this need to affect DX10 and DX11?
+#if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
+	if (m_CBTable.size() != C.m_CBTable.size()) return FALSE;
+	for (u32 i = 0; i < m_CBTable.size(); i++) {
+		if (m_CBTable[i].first != C.m_CBTable[i].first) return FALSE;
+		if (xr_strcmp(m_CBTable[i].second->GetBufferName().c_str(), C.m_CBTable[i].second->GetBufferName().c_str()) != 0) return FALSE;
+	}
+#endif
+
 	return TRUE;
 }
