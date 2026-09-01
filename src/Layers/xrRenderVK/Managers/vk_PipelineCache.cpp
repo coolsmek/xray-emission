@@ -8,6 +8,7 @@
 #include "../Resources/vk_BufferUtils.h"   // D3DDeclTypeSize (shared with loader)
 #include <vector>
 #include <algorithm>
+#include <utility>
 #include <unordered_set>
 
 // X-Ray's global RCache
@@ -150,6 +151,28 @@ void vk_PipelineCacheManager::Destroy()
     }
     m_device        = VK_NULL_HANDLE;
     m_pipelineCache = VK_NULL_HANDLE;
+}
+
+// FIX 2.3: releases a duplicate PipelineEntry that lost the double-checked-locking race
+// in BindCurrentState() (i.e. never got inserted into m_pipelines). Safe to call without
+// any lock — this entry was never published, so no other thread can hold a reference to it.
+void vk_PipelineCacheManager::DestroyPipelineEntry(PipelineEntry& entry)
+{
+    if (m_device == VK_NULL_HANDLE)
+        return;
+
+    for (VkDescriptorSetLayout sl : entry.setLayouts)
+        if (sl != VK_NULL_HANDLE)
+            vkDestroyDescriptorSetLayout(m_device, sl, nullptr);
+
+    if (entry.layout != VK_NULL_HANDLE)
+        vkDestroyPipelineLayout(m_device, entry.layout, nullptr);
+    if (entry.pipeline != VK_NULL_HANDLE)
+        vkDestroyPipeline(m_device, entry.pipeline, nullptr);
+
+    entry.setLayouts.clear();
+    entry.layout   = VK_NULL_HANDLE;
+    entry.pipeline = VK_NULL_HANDLE;
 }
 
 void vk_PipelineCacheManager::ResetDynamicStateCache(VkRecordContext* ctx)
@@ -350,22 +373,53 @@ VkPipeline vk_PipelineCacheManager::BindCurrentState(VkCommandBuffer cmdBuffer, 
         }
     }
 
-    // 5. Not found — compile a new pipeline
-    PipelineEntry entry = CompilePipeline(desc);
-
-    // 6. Store in cache and bind
+    // 5. Not found — compile a new pipeline.
+    // FIX 2.3: vkCreateGraphicsPipelines() writes into the shared m_pipelineCache object,
+    // which the Vulkan spec requires to be externally synchronized. m_compileMutex serializes
+    // ONLY the actual compile call — it does NOT block step 4's warm-cache lookups on other
+    // threads, so contention only shows up on genuine cold-cache misses (expected to become
+    // rare once the cache warms up across a level).
+    PipelineEntry entry;
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_pipelines[desc] = entry;
+        std::lock_guard<std::mutex> compileLock(m_compileMutex);
+        entry = CompilePipeline(desc);
     }
 
-    ApplyDynamicStates(entry.pipeline);
-    ctx->m_lastBoundLayout = entry.layout;
-    ctx->m_lastBoundEntry  = &m_pipelines[desc];
+    // 6. Store in cache and bind.
+    // Double-checked: another thread may have compiled AND inserted the same `desc` while we
+    // were compiling ours (both missed the cache before either finished). emplace() silently
+    // no-ops on a duplicate key, so without this check our freshly-created VkPipeline /
+    // VkPipelineLayout / VkDescriptorSetLayout(s) would leak. If we lost the race, keep the
+    // winner's entry and destroy our duplicate.
+    const PipelineEntry* insertedEntry = nullptr;
+    PipelineEntry discarded;
+    bool hadDuplicate = false;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        auto it = m_pipelines.find(desc);
+        if (it != m_pipelines.end())
+        {
+            discarded     = std::move(entry);
+            hadDuplicate  = true;
+            insertedEntry = &it->second;
+        }
+        else
+        {
+            auto result   = m_pipelines.emplace(desc, std::move(entry));
+            insertedEntry = &result.first->second;
+        }
+    }
+
+    if (hadDuplicate)
+        DestroyPipelineEntry(discarded); // outside the lock — this entry was never published
+
+    ApplyDynamicStates(insertedEntry->pipeline);
+    ctx->m_lastBoundLayout = insertedEntry->layout;
+    ctx->m_lastBoundEntry  = insertedEntry;
     ctx->m_lastDesc = desc;
     ctx->m_hasLastDesc = true;
     ctx->m_pipelineDirty = false;
-    return entry.pipeline;
+    return insertedEntry->pipeline;
 }
 
 // ─── Chunk 3: D3D9 declaration → Vulkan vertex input ──────────────────────────
@@ -621,7 +675,7 @@ vk_PipelineCacheManager::PipelineEntry vk_PipelineCacheManager::CompilePipeline(
     if (!vs || vs->module == VK_NULL_HANDLE ||
         !ps || ps->module == VK_NULL_HANDLE)
     {
-        Msg("* vk_PipelineCache: skipping compile — VS '%s' or PS '%s' module not ready (SPIR-V pending)",
+        Msg("* vk_PipelineCache: skipping compile - VS '%s' or PS '%s' module not ready (SPIR-V pending)",
             vs ? vs->name : "null", ps ? ps->name : "null");
         return entry;
     }

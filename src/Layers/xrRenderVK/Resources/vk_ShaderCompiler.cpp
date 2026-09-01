@@ -342,7 +342,7 @@ std::vector<uint32_t> vk_CompileHlslToSpirv(
         Msg("! [VK Shader] Compile error in '%s':\n%s",
             shaderName, shaderc_result_get_error_message(res));
         shaderc_result_release(res);
-        return result;   // empty → pipeline cache will skip draw calls using this shader
+        return result;   // empty -> pipeline cache will skip draw calls using this shader
     }
 
     // Log any warnings even on success
@@ -359,7 +359,7 @@ std::vector<uint32_t> vk_CompileHlslToSpirv(
 
     // ── Persist to disk cache ─────────────────────────────────────────────────
     spirv_cache_save(cachePath, result.data(), result.size());
-    Msg("* [VK Shader] Cached '%s' → %s (%zu words)", shaderName, cachePath, result.size());
+    Msg("* [VK Shader] Cached '%s' at %s (%zu words)", shaderName, cachePath, result.size());
 
     return result;
 }

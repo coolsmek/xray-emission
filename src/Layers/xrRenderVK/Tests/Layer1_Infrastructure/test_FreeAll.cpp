@@ -36,7 +36,7 @@ VK_TEST(FreeAll, NoLeakAfterSimulatedLevelUnload)
     }
 
     for (uint32_t i = 0; i < kCount; ++i)
-        vk_DestroyBuffer(bufs[i], allocs[i]);
+        MemoryManager.DestroyBuffer(bufs[i], allocs[i]);
 
     // VMA may not return pages to the OS immediately; wait for idle and force trim.
     vkDeviceWaitIdle(HW.m_vkDevice);

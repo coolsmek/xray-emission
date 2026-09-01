@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #ifdef VK_ENABLE_TESTS
 #include "vk_TestRunner.h"
+#include "vk_TestRunner_ForceLink.h"
 
 vk_TestRegistry& vk_TestRegistry::Get()
 {

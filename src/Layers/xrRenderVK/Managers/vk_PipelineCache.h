@@ -91,6 +91,13 @@ private:
     std::unordered_map<vk_PipelineStateDesc, PipelineEntry> m_pipelines;
     std::mutex m_mutex;
 
+    // FIX 2.3: vkCreateGraphicsPipelines() requires external host synchronization on the
+    // shared m_pipelineCache handle per the Vulkan spec. m_mutex alone is NOT sufficient
+    // because BindCurrentState() releases it before calling CompilePipeline() (so that a
+    // slow compile on one thread doesn't block warm-cache lookups on other threads).
+    // m_compileMutex guards ONLY the actual vkCreateGraphicsPipelines() call.
+    std::mutex m_compileMutex;
+
 public:
     const PipelineEntry& GetLastBoundEntry(VkRecordContext* ctx) const;
     vk_PipelineCacheManager();
@@ -117,6 +124,10 @@ public:
 
 private:
     PipelineEntry CompilePipeline(const vk_PipelineStateDesc& desc);
+
+    // FIX 2.3: releases a duplicate PipelineEntry's Vulkan resources when two threads
+    // raced to compile the same vk_PipelineStateDesc and lost the double-checked insert.
+    void DestroyPipelineEntry(PipelineEntry& entry);
 };
 
 extern vk_PipelineCacheManager PipelineCache;

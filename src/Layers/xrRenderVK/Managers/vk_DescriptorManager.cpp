@@ -119,6 +119,9 @@ void vk_DescriptorManager::CreateDynamicUniformBuffers(VkPhysicalDevice physDevi
 
 void vk_DescriptorManager::BeginFrame(uint32_t frameIndex)
 {
+    // NOTE: must only be called by the main thread, strictly before any worker
+    // thread touches AllocateDescriptorSet/AllocateDynamicUniform/FindCachedSet/
+    // InsertCachedSet for this frame. No lock needed here as a result.
     m_currentFrameIndex   = frameIndex;
     vkResetDescriptorPool(m_device, m_descriptorPools[m_currentFrameIndex], 0);
     m_setCache[m_currentFrameIndex].clear();
@@ -127,6 +130,8 @@ void vk_DescriptorManager::BeginFrame(uint32_t frameIndex)
 
 VkDescriptorSet vk_DescriptorManager::AllocateDescriptorSet(VkDescriptorSetLayout layout)
 {
+    std::lock_guard<std::mutex> lock(m_mutex);   // NEW
+
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     allocInfo.descriptorPool     = m_descriptorPools[m_currentFrameIndex];
@@ -140,6 +145,8 @@ VkDescriptorSet vk_DescriptorManager::AllocateDescriptorSet(VkDescriptorSetLayou
 
 void* vk_DescriptorManager::AllocateDynamicUniform(size_t size, uint32_t& outOffset)
 {
+    std::lock_guard<std::mutex> lock(m_mutex);   // NEW
+
     size_t alignedSize = (size + m_dynamicAlignment - 1) & ~(m_dynamicAlignment - 1);
     if (m_currentBufferOffset + alignedSize > m_maxBufferSize)
     {
@@ -155,6 +162,8 @@ void* vk_DescriptorManager::AllocateDynamicUniform(size_t size, uint32_t& outOff
 
 VkDescriptorSet vk_DescriptorManager::FindCachedSet(uint64_t hash) const
 {
+    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(m_mutex));   // NEW (const-correctness workaround)
+
     auto it = m_setCache[m_currentFrameIndex].find(hash);
     if (it != m_setCache[m_currentFrameIndex].end())
         return it->second;
@@ -163,5 +172,6 @@ VkDescriptorSet vk_DescriptorManager::FindCachedSet(uint64_t hash) const
 
 void vk_DescriptorManager::InsertCachedSet(uint64_t hash, VkDescriptorSet set)
 {
+    std::lock_guard<std::mutex> lock(m_mutex);   // NEW
     m_setCache[m_currentFrameIndex][hash] = set;
 }

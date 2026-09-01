@@ -6,6 +6,7 @@
 #include "Resources/vk_TextureUtils.h"
 #ifdef VK_ENABLE_TESTS
 #include "Tests/Layer4_Validation/vk_DebugMessenger.h"
+#include "Tests/vk_TestRunner.h"
 #endif
 
 #ifndef CHK_VK
@@ -329,6 +330,14 @@ void CHW::CreateDevice(HWND hw, bool move_window)
     if (!g_vkCmdSetPrimitiveTopology) g_vkCmdSetPrimitiveTopology = (PFN_vkCmdSetPrimitiveTopology)vkGetDeviceProcAddr(m_vkDevice, "vkCmdSetPrimitiveTopologyEXT");
     R_ASSERT2(g_vkCmdSetPrimitiveTopology, "Failed to load vkCmdSetPrimitiveTopology");
 
+#ifdef VK_ENABLE_TESTS
+    int fails = vk_TestRegistry::Get().RunAll();
+    if (fails > 0)
+        Msg("! [VK_TEST] %d test(s) failed!", fails);
+    else
+        Msg("* [VK_TEST] All tests passed.");
+#endif
+
     Msg("* VK: device created successfully");
 }
 
@@ -506,6 +515,14 @@ void CHW::CreateDevice_NoSwapchain(HWND hw, bool move_window, u32 width, u32 hei
     g_vkCmdSetPrimitiveTopology = (PFN_vkCmdSetPrimitiveTopology)vkGetDeviceProcAddr(m_vkDevice, "vkCmdSetPrimitiveTopology");
     if (!g_vkCmdSetPrimitiveTopology) g_vkCmdSetPrimitiveTopology = (PFN_vkCmdSetPrimitiveTopology)vkGetDeviceProcAddr(m_vkDevice, "vkCmdSetPrimitiveTopologyEXT");
     R_ASSERT2(g_vkCmdSetPrimitiveTopology, "Failed to load vkCmdSetPrimitiveTopology");
+
+#ifdef VK_ENABLE_TESTS
+    int fails = vk_TestRegistry::Get().RunAll();
+    if (fails > 0)
+        Msg("! [VK_TEST] %d test(s) failed!", fails);
+    else
+        Msg("* [VK_TEST] All tests passed.");
+#endif
 
     Msg("* VK (tool): device created successfully (no swapchain)");
 }

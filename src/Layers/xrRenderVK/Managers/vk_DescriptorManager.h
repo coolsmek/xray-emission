@@ -3,6 +3,7 @@
 #include "stdafx.h"
 #include <vulkan/vulkan.h>
 #include <unordered_map>
+#include <mutex>
 #include "vk_MemoryManager.h"   // FIX 2.1: use VMA for ring buffer allocation
 
 // Maintain a ring buffer of pools matched to the frames in flight
@@ -12,6 +13,7 @@ class vk_DescriptorManager
 {
 private:
     VkDevice m_device;
+    std::mutex m_mutex;
 
     // A separate pool for each frame in flight
     VkDescriptorPool m_descriptorPools[VK_MAX_FRAMES_IN_FLIGHT];

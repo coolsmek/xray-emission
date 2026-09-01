@@ -25,6 +25,7 @@ struct vk_TestRegistry
 // Registration macro — use at file scope
 #define VK_TEST(Suite, Name)                                             \
     static bool VkTest_##Suite##_##Name();                               \
+    extern "C" __declspec(dllexport) const int vktest_##Suite##_##Name = 1; \
     static struct _Reg_##Suite##_##Name {                                \
         _Reg_##Suite##_##Name() {                                        \
             vk_TestRegistry::Get().Register(#Suite, #Name,               \
@@ -32,6 +33,11 @@ struct vk_TestRegistry
         }                                                                \
     } _reg_##Suite##_##Name;                                             \
     static bool VkTest_##Suite##_##Name()
+
+// Macro to force-link tests in static libraries
+#define FORCE_LINK_TEST(Suite, Name) \
+    extern "C" const int vktest_##Suite##_##Name; \
+    __pragma(comment(linker, "/INCLUDE:vktest_" #Suite "_" #Name))
 
 // Assertion macro — routes to engine Msg() + R_ASSERT2
 #define VK_EXPECT(expr)                                                  \

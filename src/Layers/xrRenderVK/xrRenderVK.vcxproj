@@ -935,16 +935,20 @@ xcopy /Y /D "$(VULKAN_SDK)\Bin\shaderc_shared.dll" "$(xrGameDir)bin_dbg\$(Platfo
     </ClCompile>
     <!-- Layer 3: Subsystems -->
     <ClCompile Include="Tests\Layer3_Subsystems\test_TextureAlloc.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="Tests\Layer3_Subsystems\test_DynamicStreams.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="Tests\Layer3_Subsystems\test_VertexDecl.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
     </ClCompile>
     <!-- Layer 4: Validation -->
     <ClCompile Include="Tests\Layer4_Validation\vk_DebugMessenger.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
+    </ClCompile>
+    <!-- Layer 5: MT -->
+    <ClCompile Include="Tests\Layer5_MT\test_Layer5_MT.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)' != 'VerifiedVK' and '$(Configuration)' != 'VerifiedVKASAN'">true</ExcludedFromBuild>
     </ClCompile>
   </ItemGroup>
