@@ -13,6 +13,7 @@
 #include "Backend/vkR_Backend_Runtime.h"
 
 VkRecordContext g_vkPrimaryContext;
+VkRecordContext g_vkWorkerContexts[CHW::VK_GBUFFER_WORKERS];
 
 // Vulkan-specific global instances (defined in vkRenderFactory.cpp)
 #include "vkRenderFactory.h"

@@ -41,5 +41,10 @@ FORCE_LINK_TEST(Layer5_MT, ThreadLocalContext_DefaultsToPrimary)
 FORCE_LINK_TEST(Layer5_MT, PipelineCache_ConcurrentBindNoCorruption)
 FORCE_LINK_TEST(Layer5_MT, DescriptorManager_ConcurrentAllocNoCorruption)
 FORCE_LINK_TEST(Layer5_MT, PipelineCache_ConcurrentCompileNoCorruption)
+FORCE_LINK_TEST(Layer5_MT, TTAPI_WakeLatencyBounded)
+FORCE_LINK_TEST(Layer5_MT, ProgressiveLOD_WorkerNeverWritesCache)
+FORCE_LINK_TEST(Layer5_MT, TreeWind_MainThreadOnlyUpdate)
+FORCE_LINK_TEST(Layer5_MT, ConstantBuffer_PerWorkerStagingIsolation)
+FORCE_LINK_TEST(Layer5_MT, WorkerXformSeed_ReResolvesAfterUnmap)
 
 #endif // VK_ENABLE_TESTS

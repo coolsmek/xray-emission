@@ -70,15 +70,15 @@ public:
     // Clear G-Buffer (Position, Normal, Color) + HW depth at the start of the frame
     void phase_scene_prepare();
     // Bind G-Buffer (Position, Normal, Color) + HW depth; open rendering pass.
-    void phase_scene_begin();
+    void phase_scene_begin(VkRenderingFlags flags = 0);
     // End G-Buffer pass; transition rt_Position/Normal/Color → SHADER_READ_ONLY.
     void phase_scene_end();
     // Blit rt_Color to the provided swapchain image and transition to PRESENT_SRC.
     void phase_combine(VkCommandBuffer cmd, VkImage swapchainImage, VkImageView swapchainView);
 
     // ── u_setrt ───────────────────────────────────────────────────────────
-    void u_setrt(const ref_rt& _1, const ref_rt& _2, const ref_rt& _3, ID3DDepthStencilView* zb);
-    void u_setrt(u32 W, u32 H, ID3DRenderTargetView* _1, ID3DRenderTargetView* _2, ID3DRenderTargetView* _3, ID3DDepthStencilView* zb);
+    void u_setrt(const ref_rt& _1, const ref_rt& _2, const ref_rt& _3, ID3DDepthStencilView* zb, VkRenderingFlags flags = 0);
+    void u_setrt(u32 W, u32 H, ID3DRenderTargetView* _1, ID3DRenderTargetView* _2, ID3DRenderTargetView* _3, ID3DDepthStencilView* zb, VkRenderingFlags flags = 0);
 
     // ── Lighting accumulator (Phase 4 stubs — real shaders in Phase 5) ───
     void accum_direct(u32 sub_phase);

@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "vk_DescriptorManager.h"
 #include "vk_MemoryManager.h"
+#include "../vk_DiagTimer.h"
 
 vk_DescriptorManager DescriptorManager;
 
@@ -145,7 +146,11 @@ VkDescriptorSet vk_DescriptorManager::AllocateDescriptorSet(VkDescriptorSetLayou
 
 void* vk_DescriptorManager::AllocateDynamicUniform(size_t size, uint32_t& outOffset)
 {
+    u64* w = RCache.m_ctx ? &RCache.m_ctx->diag_lockWaitTicks_desc : nullptr;
+    vk_ScopedLockTimer lt(w);
     std::lock_guard<std::mutex> lock(m_mutex);   // NEW
+
+    if (RCache.m_ctx) RCache.m_ctx->diag_uniformCalls++;
 
     size_t alignedSize = (size + m_dynamicAlignment - 1) & ~(m_dynamicAlignment - 1);
     if (m_currentBufferOffset + alignedSize > m_maxBufferSize)
@@ -162,16 +167,26 @@ void* vk_DescriptorManager::AllocateDynamicUniform(size_t size, uint32_t& outOff
 
 VkDescriptorSet vk_DescriptorManager::FindCachedSet(uint64_t hash) const
 {
-    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(m_mutex));   // NEW (const-correctness workaround)
-
-    auto it = m_setCache[m_currentFrameIndex].find(hash);
-    if (it != m_setCache[m_currentFrameIndex].end())
-        return it->second;
+    u64* w = RCache.m_ctx ? &RCache.m_ctx->diag_lockWaitTicks_desc : nullptr;
+    { 
+        vk_ScopedLockTimer lt(w); 
+        std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(m_mutex)); 
+        auto it = m_setCache[m_currentFrameIndex].find(hash);
+        if (it != m_setCache[m_currentFrameIndex].end())
+        { 
+            if (RCache.m_ctx) RCache.m_ctx->diag_descCalls++; 
+            return it->second; 
+        }
+    }
+    if (RCache.m_ctx) RCache.m_ctx->diag_descCalls++;
     return VK_NULL_HANDLE;
 }
 
 void vk_DescriptorManager::InsertCachedSet(uint64_t hash, VkDescriptorSet set)
 {
+    u64* w = RCache.m_ctx ? &RCache.m_ctx->diag_lockWaitTicks_desc : nullptr;
+    vk_ScopedLockTimer lt(w);
     std::lock_guard<std::mutex> lock(m_mutex);   // NEW
     m_setCache[m_currentFrameIndex][hash] = set;
+    if (RCache.m_ctx) RCache.m_ctx->diag_descCalls++;
 }

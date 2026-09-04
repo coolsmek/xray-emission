@@ -10,6 +10,10 @@
 
 #include "ftreevisual.h"
 
+#if defined(USE_VK)
+#include "../xrRenderVK/Backend/vkR_Backend_Runtime.h"
+#endif
+
 shared_str m_xform;
 shared_str m_xform_v;
 shared_str c_consts;
@@ -148,41 +152,81 @@ struct FTreeVisual_setup
 	}
 };
 
+static FTreeVisual_setup tvs, prev_tvs;   // shared: safe — primary is the sole writer
+                                          // (PrepareWind() gated to primary-only, called
+                                          // before dispatch; workers only READ during the
+                                          // window primary is blocked at ttapi_RunAllWorkers())
+
+void FTreeVisual::PrepareWind()
+{
+    if (tvs.dwFrame != Device.dwFrame)
+    {
+        prev_tvs = tvs;
+        tvs.calculate();
+    }
+}
+
 void FTreeVisual::Render(float LOD)
 {
 	PROF_EVENT("FTreeVisual::Render");
-	static FTreeVisual_setup tvs, prev_tvs;
+#if defined(USE_VK)
+	// Worker threads must NEVER mutate the shared tvs/prev_tvs statics — torn wind/wave
+	// vectors corrupt leaf geometry, flickering across the whole level. Main thread
+	// pre-computes via PrepareWind() before dispatch; workers read only.
+	if (RCache.m_ctx == &g_vkPrimaryContext)
+		PrepareWind();
+#else
 	if (tvs.dwFrame != Device.dwFrame)
 	{
-		prev_tvs = tvs; // Save previous frame calculations
+		prev_tvs = tvs;
 		tvs.calculate();
 	}
+#endif
 	// setup constants
+#if defined(USE_VK)
+	R_tree& tr = RCache.m_ctx->tree;
+#else
+	R_tree& tr = RCache.tree;
+#endif
+
 #if RENDER!=R_R1
 	Fmatrix xform_v;
 	xform_v.mul_43(RCache.get_xform_view(), xform);
-	RCache.tree.set_m_xform_v(xform_v); // matrix
+	tr.set_m_xform_v(xform_v); // matrix
 #endif
 	float s = ps_r__Tree_SBC;
-	RCache.tree.set_m_xform(xform); // matrix
-	RCache.tree.set_consts(tvs.scale, tvs.scale, 0, 0); // consts/scale
-	RCache.tree.set_wave(tvs.wave); // wave
-	RCache.tree.set_wind(tvs.wind); // wind
+	tr.set_m_xform(xform); // matrix
+	tr.set_consts(tvs.scale, tvs.scale, 0, 0); // consts/scale
+	tr.set_wave(tvs.wave); // wave
+	tr.set_wind(tvs.wind); // wind
+
+#if defined(USE_VK)
+extern bool g_vkMtDiagEnabled;
+if (g_vkMtDiagEnabled) {
+    static thread_local u32 lastLoggedFrame = 0xFFFFFFFF;
+    if (lastLoggedFrame != Device.dwFrame) {
+        lastLoggedFrame = Device.dwFrame;
+        Msg("VK MT DIAG TREE ctx=%s tvsFrame=%u wantFrame=%u wind=(%.3f,%.3f,%.3f)",
+            (RCache.m_ctx == &g_vkPrimaryContext) ? "PRIMARY" : "WORKER",
+            tvs.dwFrame, Device.dwFrame, tvs.wind.x, tvs.wind.y, tvs.wind.z);
+    }
+}
+#endif
 
 	RCache.set_c(c_prev_wave, prev_tvs.wave);
 	RCache.set_c(c_prev_wind, prev_tvs.wind);
 
 #if RENDER!=R_R1
 	s *= 1.3333f;
-	RCache.tree.set_c_scale(s * c_scale.rgb.x, s * c_scale.rgb.y, s * c_scale.rgb.z, s * c_scale.hemi); // scale
-	RCache.tree.set_c_bias(s * c_bias.rgb.x, s * c_bias.rgb.y, s * c_bias.rgb.z, s * c_bias.hemi); // bias
+	tr.set_c_scale(s * c_scale.rgb.x, s * c_scale.rgb.y, s * c_scale.rgb.z, s * c_scale.hemi); // scale
+	tr.set_c_bias(s * c_bias.rgb.x, s * c_bias.rgb.y, s * c_bias.rgb.z, s * c_bias.hemi); // bias
 #else
 	CEnvDescriptor& desc = *g_pGamePersistent->Environment().CurrentEnv;
-	RCache.tree.set_c_scale(s * c_scale.rgb.x, s * c_scale.rgb.y, s * c_scale.rgb.z, s * c_scale.hemi); // scale
-	RCache.tree.set_c_bias(s * c_bias.rgb.x + desc.ambient.x, s * c_bias.rgb.y + desc.ambient.y,
+	tr.set_c_scale(s * c_scale.rgb.x, s * c_scale.rgb.y, s * c_scale.rgb.z, s * c_scale.hemi); // scale
+	tr.set_c_bias(s * c_bias.rgb.x + desc.ambient.x, s * c_bias.rgb.y + desc.ambient.y,
 	                       s * c_bias.rgb.z + desc.ambient.z, s * c_bias.hemi); // bias
 #endif
-	RCache.tree.set_c_sun(s * c_scale.sun, s * c_bias.sun, 0, 0); // sun
+	tr.set_c_sun(s * c_scale.sun, s * c_bias.sun, 0, 0); // sun
 
 #if RENDER==R_R4 || RENDER==R_R3
 
@@ -341,7 +385,12 @@ void FTreeVisual_PM::Render(float LOD)
 	if (LOD >= 0.f)
 	{
 		lod_id = iFloor((1.f - LOD) * float(pSWI->count - 1) + 0.5f);
+#if defined(USE_VK)
+		if (RCache.m_ctx == &g_vkPrimaryContext)   // main-thread-only cache write (MT-safe)
+			last_lod = lod_id;
+#else
 		last_lod = lod_id;
+#endif
 	}
 	VERIFY(lod_id>=0 && lod_id<int(pSWI->count));
 	FSlideWindow& SW = pSWI->sw[lod_id];

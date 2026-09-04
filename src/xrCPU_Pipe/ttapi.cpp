@@ -6,7 +6,8 @@ typedef struct TTAPI_WORKER_PARAMS
 	volatile LONG vlFlag;
 	LPPTTAPI_WORKER_FUNC lpWorkerFunc;
 	LPVOID lpvWorkerFuncParams;
-	DWORD dwPadding[13];
+	HANDLE hWakeEvent;
+	DWORD dwPadding[11];
 }* PTTAPI_WORKER_PARAMS;
 
 typedef PTTAPI_WORKER_PARAMS LPTTAPI_WORKER_PARAMS;
@@ -61,8 +62,7 @@ DWORD WINAPI ttapiThreadProc(LPVOID lpParameter)
 		// Slow
 		while (pParams->vlFlag)
 		{
-			Sleep(100);
-			//Msg( "Shit" );
+			WaitForSingleObject(pParams->hWakeEvent, INFINITE);
 		}
 
 	process:
@@ -154,6 +154,8 @@ DWORD ttapi_Init(_processor_info* ID)
 	for (DWORD i = 0; i < ttapi_threads_count; i++)
 	{
 		ttapi_worker_params[i].vlFlag = 1;
+		ttapi_worker_params[i].hWakeEvent = CreateEventW(NULL, FALSE, FALSE, NULL);
+		if (ttapi_worker_params[i].hWakeEvent == NULL) return 0;
 
 		// Create the thread using standard WinAPI (compatible with existing handles array)
 		ttapi_threads_handles[i] = CreateThread(
@@ -206,7 +208,10 @@ VOID ttapi_RunAllWorkers()
 
 		// Starting all workers except the last
 		for (DWORD i = 0; i < ttapi_thread_workers; ++i)
+		{
 			_InterlockedExchange(&ttapi_worker_params[i].vlFlag, 0);
+			SetEvent(ttapi_worker_params[i].hWakeEvent);
+		}
 
 		// Running last worker in current thread
 		ttapi_worker_params[ttapi_thread_workers].lpWorkerFunc(
@@ -238,10 +243,14 @@ VOID ttapi_Done()
 	{
 		ttapi_worker_params[i].lpWorkerFunc = NULL;
 		_InterlockedExchange(&ttapi_worker_params[i].vlFlag, 0);
+		SetEvent(ttapi_worker_params[i].hWakeEvent);
 	}
 
 	// Waiting threads for completion
 	WaitForMultipleObjects(ttapi_threads_count, ttapi_threads_handles, TRUE, INFINITE);
+
+	for (DWORD i = 0; i < ttapi_threads_count; i++)
+		CloseHandle(ttapi_worker_params[i].hWakeEvent);
 
 	// Freeing resources
 	free(ttapi_threads_handles);

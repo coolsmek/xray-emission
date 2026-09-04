@@ -8,6 +8,10 @@
 #include "../../xrEngine/fmesh.h"
 #include "FProgressive.h"
 
+#if defined(USE_VK)
+#include "../xrRenderVK/Backend/vkR_Backend_Runtime.h"   // g_vkPrimaryContext
+#endif
+
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
@@ -88,7 +92,16 @@ void FProgressive::Render(float LOD)
 		{
 			clamp(LOD, 0.f, 1.f);
 			lod_id = iFloor((1.f - LOD) * float(nSWI.count - 1) + 0.5f);
+#if defined(USE_VK)
+			// MT G-Buffer: worker threads must NOT write the shared per-resource
+			// last_lod cache (data race). The value is only read back on the legacy
+			// DX R1 Render(-1) path, which never runs under VK — so guarding the write
+			// to the main-thread context is fully correct and race-free here.
+			if (RCache.m_ctx == &g_vkPrimaryContext)
+				last_lod = lod_id;
+#else
 			last_lod = lod_id;
+#endif
 		}
 		VERIFY(lod_id>=0 && lod_id<int(nSWI.count));
 		FSlideWindow& SW = nSWI.sw[lod_id];

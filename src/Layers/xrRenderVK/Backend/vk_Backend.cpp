@@ -6,11 +6,21 @@ The inline drawing logic has been moved to vkR_Backend_Runtime.h to integrate wi
 
 // Note: No local CBackend vk_Backend instantiation here anymore.
 // The engine instantiates 'CBackend RCache;' globally in R_Backend.cpp.
+#include "../Managers/vk_PipelineCache.h"
+
 thread_local VkRecordContext* CBackend::m_ctx = &g_vkPrimaryContext;
+
+void CBackend::SetActiveCommandBuffer(VkCommandBuffer cmd)
+{
+    m_ctx->m_activeCmdBuffer = cmd;
+    //comment out ResetDynamicStateCache to validate increment 3 of MT G-Buffer rendering 
+    // -> triggers the expected geometry corruption symptom
+    PipelineCache.ResetDynamicStateCache(m_ctx);
+}
 
 void CBackend::OnFrameBegin(VkCommandBuffer cmdBuffer, u32 imageIndex)
 {
-    m_ctx->m_activeCmdBuffer   = cmdBuffer;
+    SetActiveCommandBuffer(cmdBuffer);
     m_ctx->m_currentImageIndex = imageIndex;
 
     // Set default front face matching X-Ray's CW expectations under inverted viewport Y

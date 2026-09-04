@@ -85,6 +85,9 @@ public:
 		PROF_EVENT("r_dsgraph_render_static");
 		r_dsgraph_render_graph(RGraph.mapStaticPasses, _priority, _clear);
 	};
+#if defined(USE_VK)
+	void r_dsgraph_render_static_range(u32 _priority, u32 passBegin, u32 passEnd, u32 packetBegin = 0, u32 packetEnd = u32(-1));
+#endif
 	IC void	r_dsgraph_render_dynamic(u32 _priority, bool _clear = true)
 	{
 		PROF_EVENT("r_dsgraph_render_dynamic");

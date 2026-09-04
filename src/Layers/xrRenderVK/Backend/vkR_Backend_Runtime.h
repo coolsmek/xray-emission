@@ -45,6 +45,16 @@ struct VkRecordContext {
     ID3D11ComputeShader* cs = nullptr;
     SDeclaration* decl = nullptr;
 
+    // -vk_mt_diag instrumentation (zero-cost when flag is off)
+    u64 diag_recordTicks       = 0;  // wall time this worker spent in GBufferStaticWorker
+    u64 diag_lockWaitTicks_desc = 0; // ticks blocked acquiring vk_DescriptorManager::m_mutex
+    u64 diag_lockWaitTicks_pipe = 0; // ticks blocked acquiring vk_PipelineCache::m_mutex/m_compileMutex
+    u32 diag_descCalls    = 0;  // FindCachedSet + InsertCachedSet calls
+    u32 diag_uniformCalls = 0;  // AllocateDynamicUniform calls
+    u32 diag_pipeHits     = 0;  // BindCurrentState cache hits (m_pipelineDirty was false)
+    u32 diag_pipeMisses   = 0;  // BindCurrentState cache misses (lock+find path taken)
+    u32 diag_pipeCompiles = 0;  // actual vkCreateGraphicsPipelines calls
+
     ID3DVertexBuffer* vb = nullptr;
     ID3DIndexBuffer* ib = nullptr;
     u32 vb_stride = 0;
@@ -74,6 +84,8 @@ struct VkRecordContext {
     ID3DDepthStencilView* pZB = nullptr;
 
     R_constant_table* ctable = nullptr;
+    u32 workerId = 0;   // 0 = primary/main thread; workers use 1..N. Indexes per-worker cbuffer staging.
+    bool needsViewProjSeed = false;   // worker-only: true until first real ctable bind this frame
     ref_cbuffer m_aVertexConstants[CBackend::MaxCBuffers] = {};
     ref_cbuffer m_aPixelConstants[CBackend::MaxCBuffers] = {};
     ref_cbuffer m_aGeometryConstants[CBackend::MaxCBuffers] = {};
@@ -90,14 +102,20 @@ struct VkRecordContext {
     CTexture* textures_ds[CBackend::mtMaxDomainShaderTextures] = {};
 
     R_xforms xforms;
+    R_hemi hemi;
+    R_tree tree;
     
     // Stats accumulators
     u64 stat_calls = 0, stat_verts = 0, stat_polys = 0, stat_vs = 0, stat_ps = 0;
     u32 s_sets_built = 0, s_sets_reused = 0, s_binds = 0;
+    R_statistics stat_r;
 };
 
 // Global primary context (used by the main thread)
 extern VkRecordContext g_vkPrimaryContext;
+extern VkRecordContext g_vkWorkerContexts[CHW::VK_GBUFFER_WORKERS];
+
+extern thread_local bool g_vkRecordingSecondaryGBuffer;
 
 extern PFN_vkCmdPushDescriptorSetKHR g_vkCmdPushDescriptorSetKHR;
 extern PFN_vkCmdBindVertexBuffers2   g_vkCmdBindVertexBuffers2;
@@ -128,7 +146,7 @@ extern VkSampler g_smp_smap;
 #include "../../xrRenderDX10/dx10ConstantBuffer.h"
 #endif
 
-IC void CBackend::set_xform(u32 ID, const Fmatrix& M) { stat.xforms++; }
+IC void CBackend::set_xform(u32 ID, const Fmatrix& _M) { stat.xforms++; }
 IC void CBackend::set_RT(ID3DRenderTargetView* RT, u32 ID)
 {
     if (m_ctx->pRT[ID] != RT)
@@ -151,6 +169,7 @@ IC void CBackend::set_ZB(ID3DDepthStencilView* ZB)
         PGO(Msg("PGO:setZB"));
         stat.target_zb++;
         m_ctx->pZB = ZB;
+        pZB = ZB;   // FIX: keep base pZB in sync — get_ZB() reads this, not m_ctx->pZB.
 #if defined(USE_VK)
         m_ctx->m_pipelineDirty = true;
         m_ctx->m_renderPassDirty = true;
@@ -181,7 +200,11 @@ ICF void CBackend::set_Format(SDeclaration* _decl)
     {
         PGO(Msg("PGO:v_format:%x",_decl));
 #ifdef DEBUG
+#if defined(USE_VK)
+        InterlockedIncrement((volatile LONG*)&stat.decl);
+#else
         stat.decl++;
+#endif
 #endif
         m_ctx->decl = _decl;
 #if defined(USE_VK)
@@ -195,7 +218,11 @@ ICF void CBackend::set_PS(ID3DPixelShader* _ps, LPCSTR _n)
     if (m_ctx->ps != _ps)
     {
         PGO(Msg("PGO:Pshader:%x",_ps));
+#if defined(USE_VK)
+        m_ctx->stat_ps++;
+#else
         stat.ps++;
+#endif
         m_ctx->ps = _ps;
 #if defined(USE_VK)
         m_ctx->m_pipelineDirty = true;
@@ -210,8 +237,7 @@ ICF void CBackend::set_GS(ID3DGeometryShader* _gs, LPCSTR _n)
 {
     if (m_ctx->gs != _gs)
     {
-        PGO(Msg("PGO:Gshader:%x",_gs));
-        m_ctx->gs = _gs;
+        PGO(Msg("PGO:Gshader:%x",_gs));        m_ctx->gs = _gs;
 #if defined(USE_VK)
         m_ctx->m_pipelineDirty = true;
 #endif
@@ -267,7 +293,11 @@ ICF void CBackend::set_VS(ID3DVertexShader* _vs, LPCSTR _n)
     if (m_ctx->vs != _vs)
     {
         PGO(Msg("PGO:Vshader:%x",_vs));
+#if defined(USE_VK)
+        m_ctx->stat_vs++;
+#else
         stat.vs++;
+#endif
         m_ctx->vs = _vs;
 #if defined(USE_VK)
         m_ctx->m_pipelineDirty = true;
@@ -340,21 +370,15 @@ IC void CBackend::set_Geometry(SGeometry* _geom)
 // Caches the constant table and distributes cbuffer slots to m_aVertex/PixelConstants.
 // The actual GPU upload (ring-buffer write + VkUpdateDescriptorSets) happens lazily
 // inside vk_FlushDescriptors() just before each draw call.
-IC void CBackend::set_Constants(R_constant_table* C)
+IC void CBackend::set_Constants(R_constant_table* _C)
 {
-    if (m_ctx->ctable == C) return;
-    m_ctx->ctable = C;
+    if (m_ctx->ctable == _C) return;
+    m_ctx->ctable = _C;
     m_ctx->xforms.unmap();
-    
-    if (m_ctx == &g_vkPrimaryContext) {
-        ctable = C;              // ← keep the bare member in sync; get_c() reads this
-        hemi.unmap();
-        tree.unmap();
-    }
-    if (!C) {
-        if (m_ctx == &g_vkPrimaryContext) ctable = nullptr;
-        return;
-    }
+    m_ctx->hemi.unmap();
+    m_ctx->tree.unmap();
+
+    if (!_C) return;
 
     PGO(Msg("PGO:c-table"));
 
@@ -367,7 +391,7 @@ IC void CBackend::set_Constants(R_constant_table* C)
     }
 
     // Walk the constant table and assign each cbuffer to the correct slot array
-    for (auto& rec : C->m_CBTable)
+    for (auto& rec : _C->m_CBTable)
     {
         u32 key = rec.first;
         u32 idx = key & CB_BufferIndexMask;
@@ -382,10 +406,24 @@ IC void CBackend::set_Constants(R_constant_table* C)
         default: break;
         }
     }
+
+#if defined(USE_VK)
+    // Worker contexts don't call set_V/set_P per-draw (only set_W). The first time
+    // a REAL shader table is bound this frame, seed view/proj using THIS table
+    // (guaranteed to declare m_V/m_P if the shader needs them) instead of borrowing
+    // an unrelated table from the primary (e.g. HOM's occlusion shader).
+    if (m_ctx->workerId != 0 && m_ctx->needsViewProjSeed)
+    {
+        m_ctx->xforms.set_V(g_vkPrimaryContext.xforms.get_V());
+        m_ctx->xforms.set_P(g_vkPrimaryContext.xforms.get_P());
+        m_ctx->needsViewProjSeed = false;
+    }
+#endif
+
     // ── Call automatic constant handlers (screen_res, timers, fog, etc.) ──────
     // Mirrors dx10R_Backend_Runtime.h — each R_constant with a handler
     // (e.g. binder_screen_res) writes its current value into the cbuffer here.
-    for (auto it = C->table.begin(); it != C->table.end(); ++it)
+    for (auto it = _C->table.begin(); it != _C->table.end(); ++it)
     {
         R_constant* Cs = &**it;
         if (!Cs || !Cs->handler)
@@ -1156,4 +1194,32 @@ IC void CBackend::Render(D3DPRIMITIVETYPE _T, u32 startV, u32 PC)
     m_ctx->stat_polys += PC;
 }
 
+#if defined(USE_VK)
+inline CTexture* CBackend::get_ActiveTexture(u32 stage)
+{
+    CTexture* tex = NULL;
+    if (stage < CTexture::rstVertex) tex = m_ctx->textures_ps[stage];
+    else if (stage < CTexture::rstGeometry) tex = m_ctx->textures_vs[stage - CTexture::rstVertex];
+    else if (stage < CTexture::rstHull) tex = m_ctx->textures_gs[stage - CTexture::rstGeometry];
+    else if (stage < CTexture::rstDomain) tex = m_ctx->textures_hs[stage - CTexture::rstHull];
+    else if (stage < CTexture::rstCompute) tex = m_ctx->textures_ds[stage - CTexture::rstDomain];
+    else if (stage < CTexture::rstInvalid) tex = m_ctx->textures_cs[stage - CTexture::rstCompute];
+    return tex;
+}
+
+inline R_constant* CBackend::get_c(LPCSTR n)
+{
+    R_constant_table* ct = m_ctx->ctable;
+    if (ct) return ct->get(n);
+    else return nullptr;
+}
+
+inline R_constant* CBackend::get_c(shared_str& n)
+{
+    R_constant_table* ct = m_ctx->ctable;
+    if (ct) return ct->get(n);
+    else return nullptr;
+}
+
+#endif
 #endif // vkR_Backend_Runtime_included

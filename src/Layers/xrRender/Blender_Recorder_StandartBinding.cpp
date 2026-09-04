@@ -39,9 +39,15 @@ BIND_DECLARE(wv_prev);
 BIND_DECLARE(vp_prev);
 BIND_DECLARE(wvp_prev);
 
+#if defined(USE_VK)
+#define DECLARE_TREE_BIND(c)	\
+	class cl_tree_##c: public R_constant_setup	{virtual void setup(R_constant* C) {RCache.m_ctx->tree.set_c_##c(C);} };	\
+	static cl_tree_##c	tree_binder_##c
+#else
 #define DECLARE_TREE_BIND(c)	\
 	class cl_tree_##c: public R_constant_setup	{virtual void setup(R_constant* C) {RCache.tree.set_c_##c(C);} };	\
 	static cl_tree_##c	tree_binder_##c
+#endif
 
 DECLARE_TREE_BIND(m_xform_v);
 DECLARE_TREE_BIND(m_xform);
@@ -54,21 +60,33 @@ DECLARE_TREE_BIND(c_sun);
 
 class cl_hemi_cube_pos_faces : public R_constant_setup
 {
+#if defined(USE_VK)
+	virtual void setup(R_constant* C) { RCache.m_ctx->hemi.set_c_pos_faces(C); }
+#else
 	virtual void setup(R_constant* C) { RCache.hemi.set_c_pos_faces(C); }
+#endif
 };
 
 static cl_hemi_cube_pos_faces binder_hemi_cube_pos_faces;
 
 class cl_hemi_cube_neg_faces : public R_constant_setup
 {
+#if defined(USE_VK)
+	virtual void setup(R_constant* C) { RCache.m_ctx->hemi.set_c_neg_faces(C); }
+#else
 	virtual void setup(R_constant* C) { RCache.hemi.set_c_neg_faces(C); }
+#endif
 };
 
 static cl_hemi_cube_neg_faces binder_hemi_cube_neg_faces;
 
 class cl_material : public R_constant_setup
 {
+#if defined(USE_VK)
+	virtual void setup(R_constant* C) { RCache.m_ctx->hemi.set_c_material(C); }
+#else
 	virtual void setup(R_constant* C) { RCache.hemi.set_c_material(C); }
+#endif
 };
 
 static cl_material binder_material;
@@ -448,7 +466,11 @@ static class cl_silencer_glowing : public R_constant_setup
 {
 	virtual void setup(R_constant* C)
 	{
+#if defined(USE_VK)
+		RCache.m_ctx->hemi.set_c_glowing(C);
+#else
 		RCache.hemi.set_c_glowing(C);
+#endif
 	}
 } binder_silencer_glowing;
 //--DSR-- SilencerOverheat_end
@@ -464,7 +486,11 @@ static class cl_heatvision_hotness : public R_constant_setup
 {
 	virtual void setup(R_constant* C)
 	{
+#if defined(USE_VK)
+		RCache.m_ctx->hemi.set_c_hotness(C);
+#else
 		RCache.hemi.set_c_hotness(C);
+#endif
 	}
 } binder_heatvision_hotness;
 

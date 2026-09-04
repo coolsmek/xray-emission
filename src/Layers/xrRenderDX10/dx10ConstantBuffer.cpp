@@ -19,11 +19,19 @@ dx10ConstantBuffer::~dx10ConstantBuffer()
 #endif
 	//	Flush();
 	_RELEASE(m_pBuffer);
+#if defined(USE_VK)
+	for (u32 i = 0; i < VK_CB_MAX_WORKERS; ++i) xr_free(m_pBufferData[i]);
+#else
 	xr_free(m_pBufferData);
+#endif
 }
 
 dx10ConstantBuffer::dx10ConstantBuffer(ID3DShaderReflectionConstantBuffer* pTable)
+#if defined(USE_VK)
+	: m_uiBufferSize(0), m_uiMembersCRC(0), m_pBuffer(nullptr)
+#else
 	: m_bChanged(true), m_uiBufferSize(0), m_uiMembersCRC(0), m_pBuffer(nullptr), m_pBufferData(nullptr)
+#endif
 {
 #if !defined(USE_VK)
 	D3D_SHADER_BUFFER_DESC Desc;
@@ -64,19 +72,32 @@ dx10ConstantBuffer::dx10ConstantBuffer(ID3DShaderReflectionConstantBuffer* pTabl
 	// VK: this constructor is never called in production code.
 	// Constant buffers in VK are populated via SPIR-V reflection, not DX10 reflection.
 	(void)pTable;
+	for (u32 i = 0; i < VK_CB_MAX_WORKERS; ++i)
+	{
+		m_pBufferData[i]     = nullptr;
+		m_bChanged[i]        = true;
+		m_vkDynamicOffset[i] = 0;
+		m_vkFlushFrame[i]    = 0xFFFFFFFF;
+	}
 #endif
 }
 
 #if defined(USE_VK)
 dx10ConstantBuffer::dx10ConstantBuffer(const char* name, u32 size)
-	: m_bChanged(true), m_uiBufferSize(size), m_uiMembersCRC(0), m_pBuffer(nullptr), m_pBufferData(nullptr)
+	: m_uiBufferSize(size), m_uiMembersCRC(0), m_pBuffer(nullptr)
 {
 	m_strBufferName._set(name);
 	m_eBufferType = 0; // D3D11_CT_CBUFFER equivalent
 
-	m_pBufferData = xr_malloc(size);
-	VERIFY(m_pBufferData);
-	ZeroMemory(m_pBufferData, size);
+	for (u32 i = 0; i < VK_CB_MAX_WORKERS; ++i)
+	{
+		m_pBufferData[i] = xr_malloc(size);
+		VERIFY(m_pBufferData[i]);
+		ZeroMemory(m_pBufferData[i], size);
+		m_bChanged[i]       = true;
+		m_vkDynamicOffset[i] = 0;
+		m_vkFlushFrame[i]    = 0xFFFFFFFF;
+	}
 }
 #endif
 
@@ -112,15 +133,16 @@ bool dx10ConstantBuffer::Similar(dx10ConstantBuffer& _in)
 void dx10ConstantBuffer::Flush()
 {
 #if defined(USE_VK)
+    const u32 workerId = g_vkWorkerId;
     uint32_t ringBufferOffset = 0;
     void* pRingPtr = DescriptorManager.AllocateDynamicUniform(m_uiBufferSize, ringBufferOffset);
     if (pRingPtr)
     {
-        CopyMemory(pRingPtr, m_pBufferData, m_uiBufferSize);
-        m_vkDynamicOffset = ringBufferOffset;
+        CopyMemory(pRingPtr, m_pBufferData[workerId], m_uiBufferSize);
+        m_vkDynamicOffset[workerId] = ringBufferOffset;
     }
-    m_bChanged = false;
-    m_vkFlushFrame = Device.dwFrame;
+    m_bChanged[workerId] = false;
+    m_vkFlushFrame[workerId] = Device.dwFrame;
 
 #else
     if (m_bChanged)

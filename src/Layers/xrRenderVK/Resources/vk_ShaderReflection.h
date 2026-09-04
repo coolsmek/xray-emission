@@ -18,6 +18,7 @@ struct vk_ShaderReflectionInput
 {
     uint32_t location;
     std::string name;
+    bool isIntegerType = false;
 };
 
 class R_constant_table;

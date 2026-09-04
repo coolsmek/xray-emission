@@ -2,6 +2,10 @@
 #define	dx10ConstantBuffer_included
 #pragma once
 
+#if defined(USE_VK)
+extern thread_local u32 g_vkWorkerId;
+#endif
+
 struct R_constant;
 struct R_constant_load;
 
@@ -35,12 +39,12 @@ public:
 
 	// VK-specific accessors for ring buffer allocation
 #if defined(USE_VK)
-	const void* GetRawData() const { return m_pBufferData; }
+	const void* GetRawData() const { return m_pBufferData[g_vkWorkerId]; }
 	u32 GetRawSize() const { return m_uiBufferSize; }
-	bool IsDirty() const { return m_bChanged; }
-	u32 GetDynamicOffset() const { return m_vkDynamicOffset; }
-	void SetDynamicOffset(u32 offset) { m_vkDynamicOffset = offset; }
-	u32 GetFlushFrame() const { return m_vkFlushFrame; }
+	bool IsDirty() const { return m_bChanged[g_vkWorkerId]; }
+	u32 GetDynamicOffset() const { return m_vkDynamicOffset[g_vkWorkerId]; }
+	void SetDynamicOffset(u32 offset) { m_vkDynamicOffset[g_vkWorkerId] = offset; }
+	u32 GetFlushFrame() const { return m_vkFlushFrame[g_vkWorkerId]; }
 #endif
 
 private:
@@ -57,12 +61,15 @@ private:
 
 	ID3DBuffer* m_pBuffer;
 	u32 m_uiBufferSize; //	Cache buffer size for debug validation
+#if defined(USE_VK)
+	static const u32 VK_CB_MAX_WORKERS = 16;  // primary(0) + workers(1..N); headroom for scaling
+	void* m_pBufferData[VK_CB_MAX_WORKERS] = {};
+	bool  m_bChanged[VK_CB_MAX_WORKERS] = {};
+	u32   m_vkDynamicOffset[VK_CB_MAX_WORKERS] = {};      // per-worker ring offset from last Flush
+	u32   m_vkFlushFrame[VK_CB_MAX_WORKERS];              // per-worker frame stamp (init 0xFFFFFFFF in ctors)
+#else
 	void* m_pBufferData;
 	bool m_bChanged;
-
-#if defined(USE_VK)
-	u32 m_vkDynamicOffset = 0;  // Ring buffer offset from last AllocateDynamicUniform
-	u32 m_vkFlushFrame = 0xFFFFFFFF; // Frame stamp of the last flush
 #endif
 
 	static const u32 lineSize = sizeof(Fvector4);

@@ -26,7 +26,11 @@ void CRenderDevice::Destroy(void)
 {
 	if (!b_is_Ready) return;
 
-	Log("Destroying Direct3D...");
+//This did not work on the Vulkan-AVX build...
+	if (Console && xr_strcmp(Console->GetString("renderer"), "renderer_vk") == 0)
+		Log("Destroying Vulkan Instance...");
+	else
+		Log("Destroying Direct3D...");
 
 	ShowCursor(TRUE);
 	ClipCursor(NULL);

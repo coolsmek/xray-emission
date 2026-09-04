@@ -189,16 +189,16 @@ void CRenderTarget::reset_end()
 // ─────────────────────────────────────────────────────────────────────────────
 // u_setrt — bind render targets and begin a VkCmdBeginRendering pass
 // ─────────────────────────────────────────────────────────────────────────────
-void CRenderTarget::u_setrt(const ref_rt& _1, const ref_rt& _2, const ref_rt& _3, ID3DDepthStencilView* zb)
+void CRenderTarget::u_setrt(const ref_rt& _1, const ref_rt& _2, const ref_rt& _3, ID3DDepthStencilView* zb, VkRenderingFlags flags)
 {
     u_setrt(dwWidth, dwHeight,
         _1 ? _1->pRT : nullptr,
         _2 ? _2->pRT : nullptr,
         _3 ? _3->pRT : nullptr,
-        zb);
+        zb, flags);
 }
 
-void CRenderTarget::u_setrt(u32 W, u32 H, ID3DRenderTargetView* _1, ID3DRenderTargetView* _2, ID3DRenderTargetView* _3, ID3DDepthStencilView* zb)
+void CRenderTarget::u_setrt(u32 W, u32 H, ID3DRenderTargetView* _1, ID3DRenderTargetView* _2, ID3DRenderTargetView* _3, ID3DDepthStencilView* zb, VkRenderingFlags flags)
 {
     VkCommandBuffer cmd = GetFrameCmd();
 
@@ -315,6 +315,7 @@ void CRenderTarget::u_setrt(u32 W, u32 H, ID3DRenderTargetView* _1, ID3DRenderTa
     renderInfo.renderArea.extent.width  = W;
     renderInfo.renderArea.extent.height = H;
     renderInfo.layerCount               = 1;
+    renderInfo.flags                    = flags;
     renderInfo.colorAttachmentCount     = rtCount;
     renderInfo.pColorAttachments        = rtCount > 0 ? colorAttachments : nullptr;
     // Only set stencil attachment if the depth format actually has a stencil plane.
@@ -323,6 +324,7 @@ void CRenderTarget::u_setrt(u32 W, u32 H, ID3DRenderTargetView* _1, ID3DRenderTa
     renderInfo.pStencilAttachment       = (hasDepth && hasStencil) ? &depthAttachment : nullptr;
 
     vkCmdBeginRendering(cmd, &renderInfo);
+    RCache.m_ctx->m_pipelineDirty = true; // NEW: force full re-eval on the first draw of every new pass instance
 
     VkViewport viewport{};
     viewport.x        = 0.0f;
@@ -386,7 +388,7 @@ void CRenderTarget::phase_scene_prepare()
 // ─────────────────────────────────────────────────────────────────────────────
 // phase_scene_begin — open G-Buffer pass (rt_Position + rt_Color + depth; r3 2-RT packed layout)
 // ─────────────────────────────────────────────────────────────────────────────
-void CRenderTarget::phase_scene_begin()
+void CRenderTarget::phase_scene_begin(VkRenderingFlags flags)
 {
 
     // r3 G-Buffer: slot0=rt_Position (packed), slot1=rt_Color (albedo+gloss)
@@ -394,7 +396,7 @@ void CRenderTarget::phase_scene_begin()
     RCache.set_RT(rt_Color    ? rt_Color->pRT    : nullptr, 1);
     RCache.set_RT(nullptr, 2);
     RCache.set_ZB(&pZB);
-    u_setrt(rt_Position, rt_Color, ref_rt(), &pZB);
+    u_setrt(rt_Position, rt_Color, ref_rt(), &pZB, flags);
 
     // Stencil - write 0x1 at pixel pos
     RCache.set_Stencil(TRUE, D3DCMP_ALWAYS, 0x01, 0xff, 0x7f, D3DSTENCILOP_KEEP, D3DSTENCILOP_REPLACE, D3DSTENCILOP_KEEP);
@@ -1037,11 +1039,15 @@ void CRenderTarget::accum_direct_finalize()
     RCache.set_ZB(nullptr);
 }
 
+thread_local bool g_vkRecordingSecondaryGBuffer = false;
+
 // ─── vk_EnsureRenderPassActive ─────────────────────────────────────────────────
 // Ensures an active Dynamic Rendering pass before a draw call. X-Ray's UI
 // bypasses CRenderTarget::u_setrt, so we must automatically catch it here.
 void vk_EnsureRenderPassActive(VkCommandBuffer cmd)
 {
+    if (g_vkRecordingSecondaryGBuffer) return;
+
     CRender* render = (CRender*)::Render;
     if (!render || !render->Target)
         return;
@@ -1199,6 +1205,7 @@ void vk_EnsureRenderPassActive(VkCommandBuffer cmd)
 
     vkCmdBeginRendering(cmd, &renderInfo);
     render->Target->m_bRenderingPassActive = true;
+    RCache.m_ctx->m_pipelineDirty = true;   // NEW: force full re-eval on the first draw of every new pass instance
 
     VkViewport viewport{};
     viewport.x        = 0.0f;

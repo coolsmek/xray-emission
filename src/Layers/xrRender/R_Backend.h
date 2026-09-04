@@ -32,8 +32,13 @@ struct R_statistics_element
 	u32 verts, dips;
 	ICF void add(u32 _verts)
 	{
+#if defined(USE_VK)
+		extern void vk_stat_element_add(R_statistics_element* elem, u32 _verts);
+		vk_stat_element_add(this, _verts);
+#else
 		verts += _verts;
 		dips++;
+#endif
 	}
 };
 
@@ -159,6 +164,7 @@ public:
 	void SetVertexStream(u32 streamSlot, VkBufferWrapper* buf, VkDeviceSize offset, u32 stride);
 	void SetIndexStream(VkBuffer buffer, VkDeviceSize offset, VkIndexType indexType);
 	VkCommandBuffer GetActiveCommandBuffer() const;
+    void SetActiveCommandBuffer(VkCommandBuffer cmd);
     bool CheckAndResetRenderPassDirty();
     u32 GetCurrentImageIndex() const;
 #endif
@@ -283,30 +289,30 @@ public:
 	} stat;
 
 public:
+#if defined(USE_VK)
+	IC CTexture* get_ActiveTexture(u32 stage);
+#else
 	IC CTexture* get_ActiveTexture(u32 stage)
 	{
+		auto ctx = this;
 		CTexture* tex = NULL;
-		if (stage < CTexture::rstVertex) tex = textures_ps[stage];
-		else if (stage < CTexture::rstGeometry) tex = textures_vs[stage - CTexture::rstVertex];
+		if (stage < CTexture::rstVertex) tex = ctx->textures_ps[stage];
+		else if (stage < CTexture::rstGeometry) tex = ctx->textures_vs[stage - CTexture::rstVertex];
 #ifdef USE_DX10
-		else tex = textures_gs[stage - CTexture::rstGeometry];
+		else tex = ctx->textures_gs[stage - CTexture::rstGeometry];
 #elif USE_DX11
-		else if (stage < CTexture::rstHull) tex = textures_gs[stage - CTexture::rstGeometry];
-		else if (stage < CTexture::rstDomain) tex = textures_hs[stage - CTexture::rstHull];
-		else if (stage < CTexture::rstCompute) tex = textures_ds[stage - CTexture::rstDomain];
-		else if (stage < CTexture::rstInvalid) tex = textures_cs[stage - CTexture::rstCompute];
+		else if (stage < CTexture::rstHull) tex = ctx->textures_gs[stage - CTexture::rstGeometry];
+		else if (stage < CTexture::rstDomain) tex = ctx->textures_hs[stage - CTexture::rstHull];
+		else if (stage < CTexture::rstCompute) tex = ctx->textures_ds[stage - CTexture::rstDomain];
+		else if (stage < CTexture::rstInvalid) tex = ctx->textures_cs[stage - CTexture::rstCompute];
 		else
 		{
 			VERIFY(!"Invalid texture stage");
 		}
-#elif USE_VK
-		else if (stage < CTexture::rstHull) tex = textures_gs[stage - CTexture::rstGeometry];
-		else if (stage < CTexture::rstDomain) tex = textures_hs[stage - CTexture::rstHull];
-		else if (stage < CTexture::rstCompute) tex = textures_ds[stage - CTexture::rstDomain];
-		else if (stage < CTexture::rstInvalid) tex = textures_cs[stage - CTexture::rstCompute];
 #endif
 		return tex;
 	}
+#endif
 
 #if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
 	IC void get_ConstantDirect(shared_str& n, u32 DataSize, void** pVData, void** pGData, void** pPData);
@@ -437,17 +443,24 @@ public:
 #endif
 
 	// constants
+#if defined(USE_VK)
+	ICF R_constant* get_c(LPCSTR n);
+	ICF R_constant* get_c(shared_str& n);
+#else
 	ICF R_constant* get_c(LPCSTR n)
 	{
-		if (ctable) return ctable->get(n);
+		R_constant_table* ct = ctable;
+		if (ct) return ct->get(n);
 		else return nullptr;
 	}
 
 	ICF R_constant* get_c(shared_str& n)
 	{
-		if (ctable) return ctable->get(n);
+		R_constant_table* ct = ctable;
+		if (ct) return ct->get(n);
 		else return nullptr;
 	}
+#endif
 
 	// constants - direct (fast)
 	// went from C -> _C
@@ -467,37 +480,37 @@ public:
 
 
 	// constants - LPCSTR (slow)
-	ICF void set_c(LPCSTR n, const Fmatrix& A) { if (ctable) set_c(ctable->get(n), A); }
-	ICF void set_c(LPCSTR n, const Fvector4& A) { if (ctable) set_c(ctable->get(n), A); }
-	ICF void set_c(LPCSTR n, float x, float y, float z, float w) { if (ctable) set_c(ctable->get(n), x, y, z, w); }
-	ICF void set_ca(LPCSTR n, u32 e, const Fmatrix& A) { if (ctable) set_ca(ctable->get(n), e, A); }
-	ICF void set_ca(LPCSTR n, u32 e, const Fvector4& A) { if (ctable) set_ca(ctable->get(n), e, A); }
+	ICF void set_c(LPCSTR n, const Fmatrix& A) { if (R_constant* C = get_c(n)) set_c(C, A); }
+	ICF void set_c(LPCSTR n, const Fvector4& A) { if (R_constant* C = get_c(n)) set_c(C, A); }
+	ICF void set_c(LPCSTR n, float x, float y, float z, float w) { if (R_constant* C = get_c(n)) set_c(C, x, y, z, w); }
+	ICF void set_ca(LPCSTR n, u32 e, const Fmatrix& A) { if (R_constant* C = get_c(n)) set_ca(C, e, A); }
+	ICF void set_ca(LPCSTR n, u32 e, const Fvector4& A) { if (R_constant* C = get_c(n)) set_ca(C, e, A); }
 	ICF void set_ca(LPCSTR n, u32 e, float x, float y, float z, float w)
 	{
-		if (ctable) set_ca(ctable->get(n), e, x, y, z, w);
+		if (R_constant* C = get_c(n)) set_ca(C, e, x, y, z, w);
 	}
 #if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
-	ICF void set_c(LPCSTR n, float A) { if (ctable) set_c(ctable->get(n), A); }
-	ICF void set_c(LPCSTR n, int A) { if (ctable) set_c(ctable->get(n), A); }
+	ICF void set_c(LPCSTR n, float A) { if (R_constant* C = get_c(n)) set_c(C, A); }
+	ICF void set_c(LPCSTR n, int A) { if (R_constant* C = get_c(n)) set_c(C, A); }
 #endif	//	USE_DX10
 
 	// constants - shared_str (average)
-	ICF void set_c(shared_str& n, const Fmatrix& A) { if (ctable) set_c(ctable->get(n), A); }
-	ICF void set_c(shared_str& n, const Fvector4& A) { if (ctable) set_c(ctable->get(n), A); }
+	ICF void set_c(shared_str& n, const Fmatrix& A) { if (R_constant* C = get_c(n)) set_c(C, A); }
+	ICF void set_c(shared_str& n, const Fvector4& A) { if (R_constant* C = get_c(n)) set_c(C, A); }
 	ICF void set_c(shared_str& n, float x, float y, float z, float w)
 	{
-		if (ctable) set_c(ctable->get(n), x, y, z, w);
+		if (R_constant* C = get_c(n)) set_c(C, x, y, z, w);
 	}
 
-	ICF void set_ca(shared_str& n, u32 e, const Fmatrix& A) { if (ctable) set_ca(ctable->get(n), e, A); }
-	ICF void set_ca(shared_str& n, u32 e, const Fvector4& A) { if (ctable) set_ca(ctable->get(n), e, A); }
+	ICF void set_ca(shared_str& n, u32 e, const Fmatrix& A) { if (R_constant* C = get_c(n)) set_ca(C, e, A); }
+	ICF void set_ca(shared_str& n, u32 e, const Fvector4& A) { if (R_constant* C = get_c(n)) set_ca(C, e, A); }
 	ICF void set_ca(shared_str& n, u32 e, float x, float y, float z, float w)
 	{
-		if (ctable) set_ca(ctable->get(n), e, x, y, z, w);
+		if (R_constant* C = get_c(n)) set_ca(C, e, x, y, z, w);
 	}
 #if defined(USE_DX10) || defined(USE_DX11) || defined(USE_VK)
-	ICF void set_c(shared_str& n, float A) { if (ctable) set_c(ctable->get(n), A); }
-	ICF void set_c(shared_str& n, int A) { if (ctable) set_c(ctable->get(n), A); }
+	ICF void set_c(shared_str& n, float A) { if (R_constant* C = get_c(n)) set_c(C, A); }
+	ICF void set_c(shared_str& n, int A) { if (R_constant* C = get_c(n)) set_c(C, A); }
 #endif	//	USE_DX10
 
 	ICF void Render(D3DPRIMITIVETYPE T, u32 baseV, u32 startV, u32 countV, u32 startI, u32 PC);

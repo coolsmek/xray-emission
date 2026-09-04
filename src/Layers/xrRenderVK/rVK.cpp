@@ -6,6 +6,7 @@
 #include <math.h>
 
 #include "rVK.h"
+#include "vk_DiagTimer.h"
 #include "Managers/vk_DescriptorManager.h"
 #include "../xrRender/SkeletonCustom.h"
 #include "Resources/vk_Shader.h"
@@ -22,6 +23,12 @@
 #include "../xrRender/LightTrack.h"
 #include <vector>
 #include "r2_types.h"
+#include "../../xrCPU_Pipe/ttapi.h"
+#include "../xrRender/FTreeVisual.h"
+
+#if defined(USE_VK)
+thread_local u32 g_vkWorkerId = 0;
+#endif
 
 // Declared in R_calculate.cpp (shared across all renderers)
 float r_dtex_range = 50.f;
@@ -261,6 +268,162 @@ void CRender::render_menu()
     //RCache.set_ZB(nullptr);
 }
 
+// ─── Multithreaded Static G-Buffer Recording Helpers ──────────────────────────
+
+static void vk_SetupGBufferSecondaryInheritance(
+    CRenderTarget* Target,
+    VkCommandBufferInheritanceRenderingInfo& inheritanceInfo,
+    VkFormat colorFormats[2],
+    VkCommandBufferInheritanceInfo& inheritance,
+    VkCommandBufferBeginInfo& beginInfo)
+{
+    inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO;
+    inheritanceInfo.colorAttachmentCount = 2; // rt_Position + rt_Color
+    colorFormats[0] = Target->rt_Position->pRT->format;
+    colorFormats[1] = Target->rt_Color->pRT->format;
+    inheritanceInfo.pColorAttachmentFormats = colorFormats;
+    inheritanceInfo.depthAttachmentFormat = Target->pZB.format;
+    inheritanceInfo.stencilAttachmentFormat = Target->pZB.format;
+    inheritanceInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    inheritance.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+    inheritance.pNext = &inheritanceInfo;
+
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    beginInfo.pInheritanceInfo = &inheritance;
+}
+
+struct GBufferStaticWorkerParams
+{
+    uint32_t workerId;
+    uint32_t frameSlot;
+    uint32_t priority;
+    uint32_t passBegin;
+    uint32_t passEnd;
+    uint32_t packetBegin;
+    uint32_t packetEnd;
+    CRenderTarget* target;
+    CDSGraphManager* dsgraph;
+};
+
+static void GBufferStaticWorker(LPVOID lpvParams)
+{
+    GBufferStaticWorkerParams* p = (GBufferStaticWorkerParams*)lpvParams;
+    const uint32_t w = p->workerId;
+    const uint32_t frameSlot = p->frameSlot;
+    VkCommandBuffer sec = HW.m_vkGBufferWorkerSecondary[frameSlot][w];
+    VkCommandPool pool = HW.m_vkGBufferWorkerPools[frameSlot][w];
+    CRenderTarget* Target = p->target;
+    VkRecordContext* ctx = &g_vkWorkerContexts[w];
+    ctx->workerId = w + 1;   // primary is 0; workers are 1..VK_GBUFFER_WORKERS
+    g_vkWorkerId = w + 1;
+
+    // Switch RCache.m_ctx to this worker's context FIRST
+    VkRecordContext* prevCtx = RCache.m_ctx;
+    RCache.m_ctx = ctx;
+
+    LARGE_INTEGER wStart; if (g_vkMtDiagEnabled) QueryPerformanceCounter(&wStart);
+
+    // Seed worker context with pass render targets, depth buffer, and pipeline state from primary
+    for (int i = 0; i < 4; ++i)
+        ctx->pRT[i] = g_vkPrimaryContext.pRT[i];
+    ctx->pZB              = g_vkPrimaryContext.pZB;
+    ctx->blend_enable     = g_vkPrimaryContext.blend_enable;
+    ctx->blend_src        = g_vkPrimaryContext.blend_src;
+    ctx->blend_dst        = g_vkPrimaryContext.blend_dst;
+    ctx->blend_op         = g_vkPrimaryContext.blend_op;
+    ctx->blend_src_alpha  = g_vkPrimaryContext.blend_src_alpha;
+    ctx->blend_dst_alpha  = g_vkPrimaryContext.blend_dst_alpha;
+    ctx->blend_op_alpha   = g_vkPrimaryContext.blend_op_alpha;
+    ctx->colorwrite_mask  = g_vkPrimaryContext.colorwrite_mask;
+    ctx->alpha_ref        = g_vkPrimaryContext.alpha_ref;
+    ctx->z_enable         = g_vkPrimaryContext.z_enable;
+    ctx->z_write_enable   = g_vkPrimaryContext.z_write_enable;
+    ctx->z_func           = g_vkPrimaryContext.z_func;
+    ctx->cull_mode        = g_vkPrimaryContext.cull_mode;
+    ctx->stencil_enable   = g_vkPrimaryContext.stencil_enable;
+    ctx->stencil_func     = g_vkPrimaryContext.stencil_func;
+    ctx->stencil_ref      = g_vkPrimaryContext.stencil_ref;
+    ctx->stencil_mask     = g_vkPrimaryContext.stencil_mask;
+    ctx->stencil_writemask= g_vkPrimaryContext.stencil_writemask;
+    ctx->stencil_fail     = g_vkPrimaryContext.stencil_fail;
+    ctx->stencil_pass     = g_vkPrimaryContext.stencil_pass;
+    ctx->stencil_zfail    = g_vkPrimaryContext.stencil_zfail;
+    // ── Reset stale per-worker constant state from the previous frame/level ──
+    // Worker contexts are global and persist; on save/level reload the old
+    // R_constant_table and cbuffers are freed, leaving c_v/c_p/ctable dangling.
+    // Must clear BEFORE any set_V/set_P (which only re-resolve when the cached
+    // pointer is null) to avoid dereferencing freed constants.
+    ctx->ctable = nullptr;
+    ctx->xforms.unmap();
+    ctx->hemi.unmap();
+    ctx->tree.unmap();
+    for (int i = 0; i < CBackend::MaxCBuffers; ++i)
+    {
+        ctx->m_aVertexConstants[i]   = 0;
+        ctx->m_aPixelConstants[i]    = 0;
+        ctx->m_aGeometryConstants[i] = 0;
+    }
+    ctx->needsViewProjSeed = true;
+
+    ctx->vs = nullptr;
+    ctx->ps = nullptr;
+    ctx->gs = nullptr;
+    ctx->cs = nullptr;
+    ctx->decl = nullptr;
+    ctx->state = nullptr;
+    ctx->T = nullptr;
+    ctx->vb = nullptr;
+    ctx->ib = nullptr;
+    ctx->vb_stride = 0;
+    ctx->m_pipelineDirty = true;
+    ctx->m_texturesDirty = true;
+
+    // Reset command pool for this worker
+    vkResetCommandPool(HW.m_vkDevice, pool, 0);
+
+    // Begin secondary command buffer
+    VkCommandBufferInheritanceRenderingInfo inheritanceInfo{};
+    VkFormat colorFormats[2] = {};
+    VkCommandBufferInheritanceInfo inheritance{};
+    VkCommandBufferBeginInfo beginInfo{};
+    vk_SetupGBufferSecondaryInheritance(Target, inheritanceInfo, colorFormats, inheritance, beginInfo);
+
+    vkBeginCommandBuffer(sec, &beginInfo);
+
+    // Re-emit dynamic state (viewport, scissor, front face)
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = (float)Target->get_height();
+    viewport.width = (float)Target->get_width();
+    viewport.height = -(float)Target->get_height();
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(sec, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = {Target->get_width(), Target->get_height()};
+    vkCmdSetScissor(sec, 0, 1, &scissor);
+
+    g_vkCmdSetFrontFace(sec, VK_FRONT_FACE_CLOCKWISE);
+
+    // Assign worker thread-local context & command buffer
+    g_vkRecordingSecondaryGBuffer = true;
+    RCache.SetActiveCommandBuffer(sec);
+
+    // Render partition
+    p->dsgraph->r_dsgraph_render_static_range(p->priority, p->passBegin, p->passEnd, p->packetBegin, p->packetEnd);
+
+    // Cleanup worker recording
+    g_vkRecordingSecondaryGBuffer = false;
+    RCache.m_ctx = prevCtx;
+    g_vkWorkerId = 0;
+    if (g_vkMtDiagEnabled) { LARGE_INTEGER wEnd; QueryPerformanceCounter(&wEnd); ctx->diag_recordTicks = (u64)(wEnd.QuadPart - wStart.QuadPart); }
+    vkEndCommandBuffer(sec);
+}
+
 // ── Render — master per-frame driver ─────────────────────────────────────────
 void CRender::Render()
 {
@@ -301,6 +464,9 @@ void CRender::Render()
     RCache.set_xform_project(Device.mProject);
     RCache.set_xform_view(Device.mView);
 
+    // MT-safety: compute frame-global tree wind on the main thread before dispatch.
+    FTreeVisual::PrepareWind();
+
     const bool rperf = !!strstr(Core.Params, "-vk_render_perf");
     CTimer tPass;
     float msVis = 0, msGBuf = 0, msShadow = 0, msCombine = 0;
@@ -337,15 +503,221 @@ void CRender::Render()
         vk_ScopedPass passGBuffer(cmd, "[Pass] G-Buffer Generation", vk_colors::GBuffer);
 
         CTimer tg;
-        // PART 0
-        Target->phase_scene_begin();
+        // PART 0 - Split pass for secondary command buffers
+        // 1. Static Geometry on Secondary Command Buffer
+        Target->phase_scene_begin(VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT);
 
         if (rperf) tg.Start();
         {
-            vk_ScopedPass passStatic(cmd, "Static Geometry", vk_colors::GBuffer);
-            GMBase.r_dsgraph_render_static(0);
+            const uint32_t frameSlot = HW.m_vkCurrentFrame % CHW::MAX_FRAMES_IN_FLIGHT;
+            const bool bMtRecord = !!strstr(Core.Params, "-vk_mt_record");
+            const u32 count0 = (u32)GMBase.RGraph.mapStaticPasses[0][0].size();
+            const u32 count1 = (u32)GMBase.RGraph.mapStaticPasses[0][1].size();
+            const u32 totalPackets = count0 + count1;
+            const bool canUseMT = bMtRecord && (ttapi_GetWorkersCount() >= 2) && (totalPackets >= 32);
+
+            if (canUseMT)
+            {
+                vk_ScopedPass passStatic(cmd, "Static Geometry (MT Secondary)", vk_colors::GBuffer);
+
+                u64 sortTicks = 0, joinTicks = 0, executeTicks = 0;
+                LARGE_INTEGER t0, t1;
+
+                // 1. Sort queues on main thread before workers begin (avoids concurrent sorting)
+                if (g_vkMtDiagEnabled) QueryPerformanceCounter(&t0);
+                for (u32 iPass = 0; iPass < SHADER_PASSES_MAX; ++iPass)
+                {
+                    auto& queue = GMBase.RGraph.mapStaticPasses[0][iPass];
+                    if (!queue.empty())
+                    {
+                        if (queue.size() < 4096)
+                            std::sort(queue.begin(), queue.end());
+                        else
+                            xr_parallel_sort(queue.begin(), queue.end());
+                    }
+                }
+                if (g_vkMtDiagEnabled) { QueryPerformanceCounter(&t1); sortTicks = (u64)(t1.QuadPart - t0.QuadPart); }
+
+                // 2. Partition across 2 workers
+                GBufferStaticWorkerParams params[2];
+                const u32 halfPackets = totalPackets / 2;
+
+                if (count0 > 0 && count1 > 0 && count0 <= (totalPackets * 3 / 4) && count1 <= (totalPackets * 3 / 4))
+                {
+                    params[0] = { 0, frameSlot, 0, 0, 1, 0, u32(-1), Target, &GMBase };
+                    params[1] = { 1, frameSlot, 0, 1, 2, 0, u32(-1), Target, &GMBase };
+                }
+                else if (count1 == 0)
+                {
+                    const u32 mid = count0 / 2;
+                    params[0] = { 0, frameSlot, 0, 0, 1, 0, mid, Target, &GMBase };
+                    params[1] = { 1, frameSlot, 0, 0, 1, mid, count0, Target, &GMBase };
+                }
+                else
+                {
+                    const u32 mid = _min(halfPackets, count0);
+                    params[0] = { 0, frameSlot, 0, 0, 1, 0, mid, Target, &GMBase };
+                    params[1] = { 1, frameSlot, 0, 0, 2, mid, count1, Target, &GMBase };
+                }
+
+                // 3. Dispatch to ttapi workers and join
+                if (g_vkMtDiagEnabled) QueryPerformanceCounter(&t0);
+                ttapi_AddWorker(GBufferStaticWorker, &params[0]);
+                ttapi_AddWorker(GBufferStaticWorker, &params[1]);
+                ttapi_RunAllWorkers();
+                if (g_vkMtDiagEnabled) { QueryPerformanceCounter(&t1); joinTicks = (u64)(t1.QuadPart - t0.QuadPart); }
+
+                // 4. Restore main thread context
+                RCache.m_ctx = &g_vkPrimaryContext;
+                RCache.SetActiveCommandBuffer(cmd);
+
+                // Aggregate worker descriptor stats
+                for (uint32_t w = 0; w < CHW::VK_GBUFFER_WORKERS; ++w)
+                {
+                    g_vkPrimaryContext.s_sets_built  += g_vkWorkerContexts[w].s_sets_built;
+                    g_vkPrimaryContext.s_sets_reused += g_vkWorkerContexts[w].s_sets_reused;
+                    g_vkPrimaryContext.s_binds       += g_vkWorkerContexts[w].s_binds;
+                    RCache.stat.vs                   += g_vkWorkerContexts[w].stat_vs;
+                    RCache.stat.ps                   += g_vkWorkerContexts[w].stat_ps;
+                    
+                    RCache.stat.r.s_static.verts += g_vkWorkerContexts[w].stat_r.s_static.verts;
+                    RCache.stat.r.s_static.dips += g_vkWorkerContexts[w].stat_r.s_static.dips;
+                    RCache.stat.r.s_flora.verts += g_vkWorkerContexts[w].stat_r.s_flora.verts;
+                    RCache.stat.r.s_flora.dips += g_vkWorkerContexts[w].stat_r.s_flora.dips;
+                    RCache.stat.r.s_flora_lods.verts += g_vkWorkerContexts[w].stat_r.s_flora_lods.verts;
+                    RCache.stat.r.s_flora_lods.dips += g_vkWorkerContexts[w].stat_r.s_flora_lods.dips;
+                    RCache.stat.r.s_details.verts += g_vkWorkerContexts[w].stat_r.s_details.verts;
+                    RCache.stat.r.s_details.dips += g_vkWorkerContexts[w].stat_r.s_details.dips;
+                    RCache.stat.r.s_dynamic.verts += g_vkWorkerContexts[w].stat_r.s_dynamic.verts;
+                    RCache.stat.r.s_dynamic.dips += g_vkWorkerContexts[w].stat_r.s_dynamic.dips;
+                    RCache.stat.r.s_dynamic_sw.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_sw.verts;
+                    RCache.stat.r.s_dynamic_sw.dips += g_vkWorkerContexts[w].stat_r.s_dynamic_sw.dips;
+                    RCache.stat.r.s_dynamic_inst.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_inst.verts;
+                    RCache.stat.r.s_dynamic_inst.dips += g_vkWorkerContexts[w].stat_r.s_dynamic_inst.dips;
+                    RCache.stat.r.s_dynamic_1B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_1B.verts;
+                    RCache.stat.r.s_dynamic_1B.dips += g_vkWorkerContexts[w].stat_r.s_dynamic_1B.dips;
+                    RCache.stat.r.s_dynamic_2B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_2B.verts;
+                    RCache.stat.r.s_dynamic_2B.dips += g_vkWorkerContexts[w].stat_r.s_dynamic_2B.dips;
+                    RCache.stat.r.s_dynamic_3B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_3B.verts;
+                    RCache.stat.r.s_dynamic_3B.dips += g_vkWorkerContexts[w].stat_r.s_dynamic_3B.dips;
+                    RCache.stat.r.s_dynamic_4B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_4B.verts;
+                    RCache.stat.r.s_dynamic_4B.dips += g_vkWorkerContexts[w].stat_r.s_dynamic_4B.dips;
+                    
+                    g_vkWorkerContexts[w].s_sets_built  = 0;
+                    g_vkWorkerContexts[w].s_sets_reused = 0;
+                    g_vkWorkerContexts[w].s_binds       = 0;
+                    g_vkWorkerContexts[w].stat_vs       = 0;
+                    g_vkWorkerContexts[w].stat_ps       = 0;
+                    
+                    g_vkWorkerContexts[w].stat_r.s_static.verts = 0;
+                    g_vkWorkerContexts[w].stat_r.s_static.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_flora.verts = 0;
+                    g_vkWorkerContexts[w].stat_r.s_flora.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_flora_lods.verts = 0;
+                    g_vkWorkerContexts[w].stat_r.s_flora_lods.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_details.verts = 0;
+                    g_vkWorkerContexts[w].stat_r.s_details.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic.verts = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_sw.verts = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_sw.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_inst.verts = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_inst.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_1B.verts = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_1B.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_2B.verts = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_2B.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_3B.verts = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_3B.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_4B.verts = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_4B.dips = 0;
+                }
+
+                // 5. Execute both secondaries in chunk order
+                if (g_vkMtDiagEnabled) QueryPerformanceCounter(&t0);
+                VkCommandBuffer secs[2] = {
+                    HW.m_vkGBufferWorkerSecondary[frameSlot][0],
+                    HW.m_vkGBufferWorkerSecondary[frameSlot][1]
+                };
+                vkCmdExecuteCommands(cmd, 2, secs);
+                if (g_vkMtDiagEnabled) { QueryPerformanceCounter(&t1); executeTicks = (u64)(t1.QuadPart - t0.QuadPart); }
+
+                // 6. Clear static queues on main thread post-join
+                for (u32 iPass = 0; iPass < SHADER_PASSES_MAX; ++iPass)
+                {
+                    GMBase.RGraph.mapStaticPasses[0][iPass].clear();
+                }
+
+                if (g_vkMtDiagEnabled)
+                {
+                    LARGE_INTEGER freq; QueryPerformanceFrequency(&freq);
+                    auto ms = [&](u64 ticks){ return 1000.0 * (double)ticks / (double)freq.QuadPart; };
+                    for (u32 w = 0; w < CHW::VK_GBUFFER_WORKERS; ++w)
+                    {
+                        auto& c = g_vkWorkerContexts[w];
+                        Msg("VK MT DIAG f%u W%u: record=%.3fms lockWait[desc=%.3fms pipe=%.3fms] calls[desc=%u unif=%u pipeHit=%u pipeMiss=%u pipeCompile=%u]",
+                            Device.dwFrame, w, ms(c.diag_recordTicks),
+                            ms(c.diag_lockWaitTicks_desc), ms(c.diag_lockWaitTicks_pipe),
+                            c.diag_descCalls, c.diag_uniformCalls, c.diag_pipeHits, c.diag_pipeMisses, c.diag_pipeCompiles);
+                        c.diag_recordTicks = c.diag_lockWaitTicks_desc = c.diag_lockWaitTicks_pipe = 0;
+                        c.diag_descCalls = c.diag_uniformCalls = c.diag_pipeHits = c.diag_pipeMisses = c.diag_pipeCompiles = 0;
+                    }
+                    Msg("VK MT DIAG f%u: sort=%.3fms join=%.3fms execute=%.3fms",
+                        Device.dwFrame, ms(sortTicks), ms(joinTicks), ms(executeTicks));
+                }
+            }
+            else
+            {
+                vk_ScopedPass passStatic(cmd, "Static Geometry (Secondary)", vk_colors::GBuffer);
+                
+                VkCommandBuffer sec = HW.m_vkGBufferStaticSecondary[frameSlot];
+                
+                VkCommandBufferInheritanceRenderingInfo inheritanceInfo{};
+                VkFormat colorFormats[2] = {};
+                VkCommandBufferInheritanceInfo inheritance{};
+                VkCommandBufferBeginInfo beginInfo{};
+                vk_SetupGBufferSecondaryInheritance(Target, inheritanceInfo, colorFormats, inheritance, beginInfo);
+                
+                vkBeginCommandBuffer(sec, &beginInfo);
+                
+                // Re-emit state
+                VkViewport viewport{};
+                viewport.x = 0.0f;
+                viewport.y = (float)Target->get_height();
+                viewport.width = (float)Target->get_width();
+                viewport.height = -(float)Target->get_height();
+                viewport.minDepth = 0.0f;
+                viewport.maxDepth = 1.0f;
+                vkCmdSetViewport(sec, 0, 1, &viewport);
+                
+                VkRect2D scissor{};
+                scissor.offset = {0, 0};
+                scissor.extent = {Target->get_width(), Target->get_height()};
+                vkCmdSetScissor(sec, 0, 1, &scissor);
+                
+                g_vkCmdSetFrontFace(sec, VK_FRONT_FACE_CLOCKWISE);
+                
+                g_vkRecordingSecondaryGBuffer = true;
+                RCache.SetActiveCommandBuffer(sec);
+                
+                GMBase.r_dsgraph_render_static(0);
+                
+                g_vkRecordingSecondaryGBuffer = false;
+                RCache.SetActiveCommandBuffer(cmd);
+                
+                vkEndCommandBuffer(sec);
+                vkCmdExecuteCommands(cmd, 1, &sec);
+            }
         }
         if (rperf) msStatic = tg.GetElapsed_sec()*1000.f;
+
+        // Revert to primary command buffer rendering for dynamic pass
+        if (Target->m_bRenderingPassActive)
+        {
+            vkCmdEndRendering(cmd);
+            Target->m_bRenderingPassActive = false;
+        }
+        Target->phase_scene_begin(); // Re-open LOAD_OP_LOAD pass
 
         if (rperf) tg.Start();
         {
@@ -632,7 +1004,29 @@ HRESULT CRender::shader_compile(
         return E_FAIL;
     }
 
-    return S_OK;
+    return TRUE;
+}
+
+void vk_stat_element_add(R_statistics_element* elem, u32 _verts)
+{
+    VkRecordContext* ctx = RCache.m_ctx;
+    if (!ctx) return;
+    
+    if (elem == &RCache.stat.r.s_static) { ctx->stat_r.s_static.verts += _verts; ctx->stat_r.s_static.dips++; }
+    else if (elem == &RCache.stat.r.s_flora) { ctx->stat_r.s_flora.verts += _verts; ctx->stat_r.s_flora.dips++; }
+    else if (elem == &RCache.stat.r.s_flora_lods) { ctx->stat_r.s_flora_lods.verts += _verts; ctx->stat_r.s_flora_lods.dips++; }
+    else if (elem == &RCache.stat.r.s_details) { ctx->stat_r.s_details.verts += _verts; ctx->stat_r.s_details.dips++; }
+    else if (elem == &RCache.stat.r.s_dynamic) { ctx->stat_r.s_dynamic.verts += _verts; ctx->stat_r.s_dynamic.dips++; }
+    else if (elem == &RCache.stat.r.s_dynamic_sw) { ctx->stat_r.s_dynamic_sw.verts += _verts; ctx->stat_r.s_dynamic_sw.dips++; }
+    else if (elem == &RCache.stat.r.s_dynamic_inst) { ctx->stat_r.s_dynamic_inst.verts += _verts; ctx->stat_r.s_dynamic_inst.dips++; }
+    else if (elem == &RCache.stat.r.s_dynamic_1B) { ctx->stat_r.s_dynamic_1B.verts += _verts; ctx->stat_r.s_dynamic_1B.dips++; }
+    else if (elem == &RCache.stat.r.s_dynamic_2B) { ctx->stat_r.s_dynamic_2B.verts += _verts; ctx->stat_r.s_dynamic_2B.dips++; }
+    else if (elem == &RCache.stat.r.s_dynamic_3B) { ctx->stat_r.s_dynamic_3B.verts += _verts; ctx->stat_r.s_dynamic_3B.dips++; }
+    else if (elem == &RCache.stat.r.s_dynamic_4B) { ctx->stat_r.s_dynamic_4B.verts += _verts; ctx->stat_r.s_dynamic_4B.dips++; }
+    else {
+        elem->verts += _verts;
+        elem->dips++;
+    }
 }
 
 // ── Viewport range helpers (mirror R4 RSSetViewports calls) ──────────────────

@@ -15,6 +15,8 @@
 #include <vulkan/vulkan.h>
 #include <mutex>
 #include <functional>
+#include <array>
+#include <vector>
 #endif
 
 #include "hwcaps.h"
@@ -155,6 +157,11 @@ public:
     // ── Command infrastructure ────────────────────────────────────────────────
     VkCommandPool           m_vkCmdPool             = VK_NULL_HANDLE;
     xr_vector<VkCommandBuffer> m_vkCmdBuffers;      // one per swapchain image
+    xr_vector<VkCommandBuffer> m_vkGBufferStaticSecondary; // one per frame-in-flight slot (Increment 3+)
+
+    static constexpr uint32_t VK_GBUFFER_WORKERS = 2;
+    std::vector<std::array<VkCommandPool,   VK_GBUFFER_WORKERS>> m_vkGBufferWorkerPools;      // [frame]
+    std::vector<std::array<VkCommandBuffer, VK_GBUFFER_WORKERS>> m_vkGBufferWorkerSecondary;  // [frame]
 
     // ── Synchronisation (double-buffered) ─────────────────────────────────────
     static constexpr uint32_t MAX_FRAMES_IN_FLIGHT  = 2;

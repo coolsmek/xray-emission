@@ -31,6 +31,8 @@ std::vector<vk_ShaderReflectionInput> vk_ShaderReflection::ReflectInputs(const u
             vk_ShaderReflectionInput in;
             in.location = input_vars[i]->location;
             in.name = input_vars[i]->name ? input_vars[i]->name : "";
+            in.isIntegerType = input_vars[i]->type_description &&
+                               (input_vars[i]->type_description->type_flags & SPV_REFLECT_TYPE_FLAG_INT) != 0;
             inputs.push_back(in);
         }
     }

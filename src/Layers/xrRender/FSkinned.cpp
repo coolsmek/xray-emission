@@ -14,6 +14,10 @@
 #include "FSkinned.h"
 #include "SkeletonX.h"
 
+#if defined(USE_VK)
+#include "../xrRenderVK/Backend/vkR_Backend_Runtime.h"   // g_vkPrimaryContext
+#endif
+
 #include "../xrRenderDX10/dx10BufferUtils.h"
 
 #include "../../xrEngine/EnnumerateVertices.h"
@@ -407,7 +411,15 @@ void CSkeletonX_PM::Render(float LOD)
 	{
 		clamp(LOD, 0.f, 1.f);
 		lod_id = iFloor((1.f - LOD) * float(nSWI.count - 1) + 0.5f);
+#if defined(USE_VK)
+		// Skinned progressive meshes are multi-threaded starting in Increment 5/6 —
+		// workers must never write the shared last_lod cache. Read-back (Render<0) is
+		// DX-R1-only, so main-thread-guarding the write is correct and race-free.
+		if (RCache.m_ctx == &g_vkPrimaryContext)
+			inherited1::last_lod = lod_id;
+#else
 		inherited1::last_lod = lod_id;
+#endif
 	}
 	VERIFY(lod_id>=0 && lod_id<int(nSWI.count));
 	FSlideWindow& SW = nSWI.sw[lod_id];

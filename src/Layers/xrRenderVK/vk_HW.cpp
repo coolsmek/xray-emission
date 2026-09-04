@@ -17,6 +17,7 @@
 extern BOOL xrRender_test_surface(HWND hWnd);
 
 bool g_bVulkanDebugLog = false;
+bool g_vkMtDiagEnabled = false;
 
 // [Phase 11] Global function pointer for VK_KHR_push_descriptor
 PFN_vkCmdPushDescriptorSetKHR g_vkCmdPushDescriptorSetKHR = nullptr;
@@ -58,6 +59,7 @@ CHW::~CHW()
 
 void CHW::CreateD3D()
 {
+    g_vkMtDiagEnabled = !!strstr(Core.Params, "-vk_mt_diag");
     VkApplicationInfo ai{};
     ai.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     ai.pApplicationName   = "S.T.A.L.K.E.R. X-Ray VK";
@@ -555,6 +557,19 @@ void CHW::DestroyDevice()
         vkDestroyCommandPool(m_vkDevice, m_vkTransferPool, nullptr);
         m_vkTransferPool = VK_NULL_HANDLE;
     }
+    for (size_t i = 0; i < m_vkGBufferWorkerPools.size(); ++i)
+    {
+        for (uint32_t w = 0; w < VK_GBUFFER_WORKERS; ++w)
+        {
+            if (m_vkGBufferWorkerPools[i][w] != VK_NULL_HANDLE)
+            {
+                vkDestroyCommandPool(m_vkDevice, m_vkGBufferWorkerPools[i][w], nullptr);
+                m_vkGBufferWorkerPools[i][w] = VK_NULL_HANDLE;
+            }
+        }
+    }
+    m_vkGBufferWorkerPools.clear();
+    m_vkGBufferWorkerSecondary.clear();
 
     void vk_Texture_Cleanup();
     vk_Texture_Cleanup();
@@ -1010,6 +1025,49 @@ void CHW::vk_CreateCommandBuffers()
         string64 cmdName;
         xr_sprintf(cmdName, "Frame CommandBuffer #%u", i);
         vk_SetDebugName(m_vkDevice, VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)m_vkCmdBuffers[i], cmdName);
+    }
+
+    m_vkGBufferStaticSecondary.resize(MAX_FRAMES_IN_FLIGHT);
+    VkCommandBufferAllocateInfo sai{};
+    sai.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    sai.commandPool        = m_vkCmdPool;               // same pool — RESET_COMMAND_BUFFER_BIT already set
+    sai.level              = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+    sai.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
+    vkAllocateCommandBuffers(m_vkDevice, &sai, m_vkGBufferStaticSecondary.data());
+    
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+        string64 n; xr_sprintf(n, "GBuffer Static Secondary #%u", i);
+        vk_SetDebugName(m_vkDevice, VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)m_vkGBufferStaticSecondary[i], n);
+    }
+
+    // Per-worker command pools and secondary command buffers for MT G-Buffer
+    m_vkGBufferWorkerPools.resize(MAX_FRAMES_IN_FLIGHT);
+    m_vkGBufferWorkerSecondary.resize(MAX_FRAMES_IN_FLIGHT);
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+    {
+        for (uint32_t w = 0; w < VK_GBUFFER_WORKERS; ++w)
+        {
+            VkCommandPoolCreateInfo cpci{};
+            cpci.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            cpci.queueFamilyIndex = m_vkGraphicsQF;
+            cpci.flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+            CHK_VK(vkCreateCommandPool(m_vkDevice, &cpci, nullptr, &m_vkGBufferWorkerPools[i][w]));
+
+            string64 poolName;
+            xr_sprintf(poolName, "GBuffer Worker Pool f%u w%u", i, w);
+            vk_SetDebugName(m_vkDevice, VK_OBJECT_TYPE_COMMAND_POOL, (uint64_t)m_vkGBufferWorkerPools[i][w], poolName);
+
+            VkCommandBufferAllocateInfo wsai{};
+            wsai.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            wsai.commandPool        = m_vkGBufferWorkerPools[i][w];
+            wsai.level              = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+            wsai.commandBufferCount = 1;
+            CHK_VK(vkAllocateCommandBuffers(m_vkDevice, &wsai, &m_vkGBufferWorkerSecondary[i][w]));
+
+            string64 cbName;
+            xr_sprintf(cbName, "GBuffer Worker CB f%u w%u", i, w);
+            vk_SetDebugName(m_vkDevice, VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)m_vkGBufferWorkerSecondary[i][w], cbName);
+        }
     }
 }
 

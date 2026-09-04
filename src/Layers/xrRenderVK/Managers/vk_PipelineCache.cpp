@@ -6,6 +6,7 @@
 #include "../Resources/vk_ShaderReflection.h"
 #include "../Resources/vk_Shader.h"
 #include "../Resources/vk_BufferUtils.h"   // D3DDeclTypeSize (shared with loader)
+#include "../vk_DiagTimer.h"
 #include <vector>
 #include <algorithm>
 #include <utility>
@@ -188,11 +189,12 @@ void vk_PipelineCacheManager::ResetDynamicStateCache(VkRecordContext* ctx)
 VkPipeline vk_PipelineCacheManager::BindCurrentState(VkCommandBuffer cmdBuffer, VkRecordContext* ctx)
 {
     static u32 s_lastFrame = 0;
-    static u32 s_pipes_issued = 0, s_pipes_skipped = 0;
+    static std::atomic<u32> s_pipes_issued(0);
+    static std::atomic<u32> s_pipes_skipped(0);
     static bool s_pipeStats = !!strstr(Core.Params, "-vk_pipe_stats");
     if (s_pipeStats && s_lastFrame != Device.dwFrame) {
         if (s_lastFrame != 0)
-            Msg("VK PIPE STATS f%u: %u issued, %u skipped", s_lastFrame, s_pipes_issued, s_pipes_skipped);
+            Msg("VK PIPE STATS f%u: %u issued, %u skipped", s_lastFrame, s_pipes_issued.load(), s_pipes_skipped.load());
         s_pipes_issued = 0;
         s_pipes_skipped = 0;
         s_lastFrame = Device.dwFrame;
@@ -260,6 +262,7 @@ VkPipeline vk_PipelineCacheManager::BindCurrentState(VkCommandBuffer cmdBuffer, 
 
     if (!ctx->m_pipelineDirty && ctx->m_hasLastDesc)
     {
+        if (ctx) ctx->diag_pipeHits++;
         s_pipes_skipped++;
 #ifdef DEBUG
         vk_PipelineStateDesc debugDesc = {};
@@ -359,7 +362,11 @@ VkPipeline vk_PipelineCacheManager::BindCurrentState(VkCommandBuffer cmdBuffer, 
 
     // 4. Look up in hash map
     {
+        u64* w = ctx ? &ctx->diag_lockWaitTicks_pipe : nullptr;
+        vk_ScopedLockTimer lt(w);
         std::lock_guard<std::mutex> lock(m_mutex);
+        if (ctx) ctx->diag_pipeMisses++;
+
         auto it = m_pipelines.find(desc);
         if (it != m_pipelines.end())
         {
@@ -381,7 +388,10 @@ VkPipeline vk_PipelineCacheManager::BindCurrentState(VkCommandBuffer cmdBuffer, 
     // rare once the cache warms up across a level).
     PipelineEntry entry;
     {
+        u64* w = ctx ? &ctx->diag_lockWaitTicks_pipe : nullptr;
+        vk_ScopedLockTimer lt(w);
         std::lock_guard<std::mutex> compileLock(m_compileMutex);
+        if (ctx) ctx->diag_pipeCompiles++;
         entry = CompilePipeline(desc);
     }
 
@@ -427,28 +437,42 @@ VkPipeline vk_PipelineCacheManager::BindCurrentState(VkCommandBuffer cmdBuffer, 
 // D3DDECLTYPE → byte size
 
 // D3DDECLTYPE → VkFormat
-static VkFormat D3DDeclTypeToVkFormat(uint8_t type)
+// D3DDECLTYPE -> VkFormat. `shaderWantsInt` disambiguates the three decl types whose
+// native bit layout is integer (UBYTE4=5, SHORT2=6, SHORT4=7) but whose actual SPIR-V
+// consumer may be compiled as int OR float depending on usage (see BuildVertexInput).
+// DO NOT flip these wholesale: UBYTE4 backs skinning BLENDINDICES (must stay UINT) and
+// SHORT4 backs CDetailManager's array-index field (must stay SINT); only elements whose
+// reflected shader input is genuinely float (e.g. v_static's tc/lmh) need the SCALED form.
+static VkFormat D3DDeclTypeToVkFormat(uint8_t type, bool shaderWantsInt)
 {
     switch (type) {
     case 0:  return VK_FORMAT_R32_SFLOAT;
     case 1:  return VK_FORMAT_R32G32_SFLOAT;
     case 2:  return VK_FORMAT_R32G32B32_SFLOAT;
     case 3:  return VK_FORMAT_R32G32B32A32_SFLOAT;
-    case 4:  return VK_FORMAT_R8G8B8A8_UNORM;        // D3DCOLOR: present as RGBA so shader's .bgra swizzle (DX11 compat) corrects to proper colors
-    case 5:  return VK_FORMAT_R8G8B8A8_UINT;
-    case 6:  return VK_FORMAT_R16G16_SINT;
-    case 7:  return VK_FORMAT_R16G16B16A16_SINT;
-    case 8:  return VK_FORMAT_R8G8B8A8_UNORM;        // UBYTE4N
+    case 4:  return VK_FORMAT_R8G8B8A8_UNORM;
+    case 5:  return shaderWantsInt ? VK_FORMAT_R8G8B8A8_UINT     : VK_FORMAT_R8G8B8A8_USCALED;
+    case 6:  return shaderWantsInt ? VK_FORMAT_R16G16_SINT       : VK_FORMAT_R16G16_SSCALED;
+    case 7:  return shaderWantsInt ? VK_FORMAT_R16G16B16A16_SINT : VK_FORMAT_R16G16B16A16_SSCALED;
+    case 8:  return VK_FORMAT_R8G8B8A8_UNORM;
     case 9:  return VK_FORMAT_R16G16_SNORM;
     case 10: return VK_FORMAT_R16G16B16A16_SNORM;
     case 11: return VK_FORMAT_R16G16_UNORM;
     case 12: return VK_FORMAT_R16G16B16A16_UNORM;
-    case 13: return VK_FORMAT_A2B10G10R10_UINT_PACK32;
+    case 13: return shaderWantsInt ? VK_FORMAT_A2B10G10R10_UINT_PACK32 : VK_FORMAT_A2B10G10R10_USCALED_PACK32;
     case 14: return VK_FORMAT_A2B10G10R10_SNORM_PACK32;
     case 15: return VK_FORMAT_R16G16_SFLOAT;
     case 16: return VK_FORMAT_R16G16B16A16_SFLOAT;
     default: return VK_FORMAT_UNDEFINED;
     }
+}
+
+// Looks up whether the shader's reflected input at `loc` is integer-typed.
+static bool reflectionLocationIsInt(const std::vector<vk_ShaderReflectionInput>& reflection, uint32_t loc)
+{
+    for (const auto& in : reflection)
+        if (in.location == loc) return in.isIntegerType;
+    return false;
 }
 
 // Collision-proof field-name matcher.
@@ -580,14 +604,13 @@ static BuiltVertexInput BuildVertexInput(const SDeclaration* decl, const std::ve
     std::unordered_set<uint32_t> assignedLocations;
 
     // Collect all valid decl elements for two-pass processing.
-    struct PendingEl { VkFormat fmt; uint16_t stream; uint32_t offset; uint8_t usage; uint8_t usageIndex; };
+    struct PendingEl { uint8_t type; uint16_t stream; uint32_t offset; uint8_t usage; uint8_t usageIndex; };
     std::vector<PendingEl> pending;
     for (const auto& el : decl->dcl_code)
     {
         if (el.Stream == 0xFF) break;
-        VkFormat fmt = D3DDeclTypeToVkFormat(el.Type);
-        if (fmt == VK_FORMAT_UNDEFINED) continue;
-        pending.push_back({ fmt, el.Stream, el.Offset, el.Usage, el.UsageIndex });
+        if (el.Type > 16) continue;   // unknown/invalid decl type
+        pending.push_back({ el.Type, el.Stream, el.Offset, el.Usage, el.UsageIndex });
     }
 
     // PASS 1: exact field-name matches.
@@ -604,10 +627,14 @@ static BuiltVertexInput BuildVertexInput(const SDeclaration* decl, const std::ve
         matched[i] = true;
         assignedLocations.insert(reflLoc);
 
+        bool shaderWantsInt = reflectionLocationIsInt(reflection, reflLoc);
+        VkFormat fmt = D3DDeclTypeToVkFormat(pending[i].type, shaderWantsInt);
+        if (fmt == VK_FORMAT_UNDEFINED) continue;
+
         VkVertexInputAttributeDescription a{};
         a.location = reflLoc;
         a.binding  = pending[i].stream;
-        a.format   = pending[i].fmt;
+        a.format   = fmt;
         a.offset   = pending[i].offset;
         out.attribs.push_back(a);
     }
@@ -635,10 +662,13 @@ static BuiltVertexInput BuildVertexInput(const SDeclaration* decl, const std::ve
         uint32_t assignedLoc = locationIndex++;
         assignedLocations.insert(assignedLoc);
 
+        bool shaderWantsInt = reflectionLocationIsInt(reflection, assignedLoc);
+        VkFormat fmt = D3DDeclTypeToVkFormat(pending[i].type, shaderWantsInt);
+
         VkVertexInputAttributeDescription a{};
         a.location = assignedLoc;
         a.binding  = pending[i].stream;
-        a.format   = pending[i].fmt;
+        a.format   = fmt;
         a.offset   = pending[i].offset;
         out.attribs.push_back(a);
     }

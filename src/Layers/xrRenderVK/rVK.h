@@ -229,8 +229,8 @@ public:
         o_hemi = 0.75f * LT.get_hemi();
         o_sun = 0.75f * LT.get_sun();
         //--DSR-- HeatVision_start
-        RCache.hemi.set_hotness(O->GetHotness(), O->GetTransparency(), 0.f, 0.f);
-        RCache.hemi.set_glowing(
+        RCache.m_ctx->hemi.set_hotness(O->GetHotness(), O->GetTransparency(), 0.f, 0.f);
+        RCache.m_ctx->hemi.set_glowing(
             sil_glow_color.x,
             sil_glow_color.y,
             sil_glow_color.z, O->GetGlowing());
@@ -247,9 +247,9 @@ public:
         CTexture* T = RCache.get_ActiveTexture(u32(C->samp.index));
         VERIFY(T);
         float mtl = T ? T->m_material : 0.f;
-        RCache.hemi.set_material(o_hemi, mtl, 0, (mtl + .5f) / 4.f);
-        RCache.hemi.set_pos_faces(o_hemi_cube[CROS_impl::CUBE_FACE_POS_X], o_hemi_cube[CROS_impl::CUBE_FACE_POS_Y], o_hemi_cube[CROS_impl::CUBE_FACE_POS_Z]);
-        RCache.hemi.set_neg_faces(o_hemi_cube[CROS_impl::CUBE_FACE_NEG_X], o_hemi_cube[CROS_impl::CUBE_FACE_NEG_Y], o_hemi_cube[CROS_impl::CUBE_FACE_NEG_Z]);
+        RCache.m_ctx->hemi.set_material(o_hemi, mtl, 0, (mtl + .5f) / 4.f);
+        RCache.m_ctx->hemi.set_pos_faces(o_hemi_cube[CROS_impl::CUBE_FACE_POS_X], o_hemi_cube[CROS_impl::CUBE_FACE_POS_Y], o_hemi_cube[CROS_impl::CUBE_FACE_POS_Z]);
+        RCache.m_ctx->hemi.set_neg_faces(o_hemi_cube[CROS_impl::CUBE_FACE_NEG_X], o_hemi_cube[CROS_impl::CUBE_FACE_NEG_Y], o_hemi_cube[CROS_impl::CUBE_FACE_NEG_Z]);
     }
     // ── IRender_interface — core frame pump ───────────────────────────────
     virtual void        Render();

@@ -230,6 +230,121 @@ void CDSGraphManager::r_dsgraph_render_graph(RenderQueueArray& queues, u32 _prio
 #endif
 }
 
+#if defined(USE_VK)
+void CDSGraphManager::r_dsgraph_render_static_range(u32 _priority, u32 passBegin, u32 passEnd, u32 packetBegin, u32 packetEnd)
+{
+    const bool dp = !!strstr(Core.Params, "-vk_draw_perf");
+    u64 t_start = dp ? CPU::GetCLK() : 0;
+
+    RCache.set_xform_world(Fidentity);
+
+    bool bSkipDraw = (RImplementation.phase == CRender::PHASE_SMAP && strstr(Core.Params, "-skip_cs_geo"));
+    if (bSkipDraw)
+        return;
+
+    passEnd = _min(passEnd, (u32)SHADER_PASSES_MAX);
+
+    for (u32 iPass = passBegin; iPass < passEnd; ++iPass)
+    {
+        auto& queue = RGraph.mapStaticPasses[_priority][iPass];
+        if (queue.empty())
+            continue;
+
+        u32 startIdx = 0;
+        u32 endIdx = (u32)queue.size();
+        if (iPass == passBegin && packetBegin > 0)
+            startIdx = _min(packetBegin, endIdx);
+        if (iPass == (passEnd - 1) && packetEnd < endIdx)
+            endIdx = packetEnd;
+
+        if (startIdx >= endIdx)
+            continue;
+
+        // Render
+        vs_type pVS = nullptr;
+        gs_type pGS = nullptr;
+        ps_type pPS = nullptr;
+        hs_type pHS = nullptr;
+        ds_type pDS = nullptr;
+        R_constant_table* pCS = nullptr;
+        ID3DState* pState = nullptr;
+        STextureList* pTextures = nullptr;
+
+        for (u32 idx = startIdx; idx < endIdx; ++idx)
+        {
+            auto& packet = queue[idx];
+
+            u64 pa = dp ? CPU::GetCLK() : 0;
+
+            if (packet.pState != pState)
+            {
+                pState = packet.pState;
+                RCache.set_States(pState);
+            }
+
+            if (packet.pGS != pGS)
+            {
+                pGS = packet.pGS;
+                RCache.set_GS(pGS);
+            }
+
+            if (packet.pHS != pHS)
+            {
+                pHS = packet.pHS;
+                RCache.set_HS(pHS);
+            }
+            if (packet.pDS != pDS)
+            {
+                pDS = packet.pDS;
+                RCache.set_DS(pDS);
+            }
+
+            if (packet.pVS != pVS)
+            {
+                pVS = packet.pVS;
+                RCache.set_VS(pVS);
+            }
+
+            if (packet.pPS != pPS)
+            {
+                pPS = packet.pPS;
+                RCache.set_PS(pPS);
+            }
+
+            if (packet.pCS != pCS)
+            {
+                pCS = packet.pCS;
+                RCache.set_Constants(pCS);
+            }
+
+            u64 pb = dp ? CPU::GetCLK() : 0; if (dp) g_tState += pb - pa;
+
+            if (packet.pTextures != pTextures)
+            {
+                pTextures = packet.pTextures;
+                RCache.set_Textures(pTextures);
+                RImplementation.apply_lmaterial();
+            }
+
+            u64 pc = dp ? CPU::GetCLK() : 0; if (dp) g_tTex += pc - pb;
+
+            auto& item = packet.item;
+            float LOD = calcLOD(item.ssa, item.pVisual->vis.sphere.R);
+
+            u64 pd = dp ? CPU::GetCLK() : 0; if (dp) g_tLOD += pd - pc;
+
+            item.pVisual->Render(LOD);
+
+            u64 pe = dp ? CPU::GetCLK() : 0; if (dp) g_tVis += pe - pd;
+        }
+
+        // NOTE: queues are NOT cleared here; cleared by main thread after worker join
+    }
+
+    if (dp) g_tDSGraph += CPU::GetCLK() - t_start;
+}
+#endif
+
 //////////////////////////////////////////////////////////////////////////
 // HUD render
 void CDSGraphManager::r_dsgraph_render_hud()

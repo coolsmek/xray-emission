@@ -5,16 +5,21 @@
 IC Fvector4* dx10ConstantBuffer::Access(u16 offset)
 {
 #if defined(USE_VK)
-    if (!m_pBufferData || m_uiBufferSize == 0)
-    {
-        static Fvector4 s_dummy{0,0,0,0};
-        return &s_dummy;
-    }
+const u32 workerId = g_vkWorkerId;
+if (!m_pBufferData[workerId] || m_uiBufferSize == 0)
+{
+static thread_local Fvector4 s_dummy{0,0,0,0};
+return &s_dummy;
+}
+VERIFY(offset < (int)m_uiBufferSize);
+BYTE* res = ((BYTE*)m_pBufferData[workerId]) + offset;
+return (Fvector4*)res;
+#else
+// We no longer set m_bChanged here. The set() functions will set it if memory differs.
+VERIFY(offset<(int)m_uiBufferSize);
+BYTE* res = ((BYTE*)m_pBufferData) + offset;
+return (Fvector4*)res;
 #endif
-	// We no longer set m_bChanged here. The set() functions will set it if memory differs.
-	VERIFY(offset<(int)m_uiBufferSize);
-	BYTE* res = ((BYTE*)m_pBufferData) + offset;
-	return (Fvector4*)res;
 }
 
 IC void dx10ConstantBuffer::set(R_constant* C, R_constant_load& L, const Fmatrix& A)
@@ -65,7 +70,11 @@ IC void dx10ConstantBuffer::set(R_constant* C, R_constant_load& L, const Fmatrix
 		NODEFAULT;
 #endif
 	}
+#if defined(USE_VK)
+	if (bChanged) for (u32 _i = 0; _i < VK_CB_MAX_WORKERS; ++_i) m_bChanged[_i] = true;
+#else
 	if (bChanged) m_bChanged = true;
+#endif
 }
 
 IC void dx10ConstantBuffer::set(R_constant* C, R_constant_load& L, const Fvector4& A)
@@ -87,7 +96,11 @@ IC void dx10ConstantBuffer::set(R_constant* C, R_constant_load& L, const Fvector
 
 	if (memcmp(it, &A[0], count*sizeof(float)) != 0) {
 		CopyMemory(it, &A[0], count*sizeof(float));
+#if defined(USE_VK)
+		for (u32 _i = 0; _i < VK_CB_MAX_WORKERS; ++_i) m_bChanged[_i] = true;
+#else
 		m_bChanged = true;
+#endif
 	}
 }
 
@@ -99,7 +112,11 @@ IC void dx10ConstantBuffer::set(R_constant* C, R_constant_load& L, float A)
 	VERIFY(u32((u32)L.index+sizeof(float)) <= m_uiBufferSize);
 	if (*it != A) {
 		*it = A;
+#if defined(USE_VK)
+		for (u32 _i = 0; _i < VK_CB_MAX_WORKERS; ++_i) m_bChanged[_i] = true;
+#else
 		m_bChanged = true;
+#endif
 	}
 }
 
@@ -111,7 +128,11 @@ IC void dx10ConstantBuffer::set(R_constant* C, R_constant_load& L, int A)
 	VERIFY(u32((u32)L.index+sizeof(int)) <= m_uiBufferSize);
 	if (*it != A) {
 		*it = A;
+#if defined(USE_VK)
+		for (u32 _i = 0; _i < VK_CB_MAX_WORKERS; ++_i) m_bChanged[_i] = true;
+#else
 		m_bChanged = true;
+#endif
 	}
 }
 
@@ -170,7 +191,11 @@ IC void dx10ConstantBuffer::seta(R_constant* C, R_constant_load& L, u32 e, const
 		NODEFAULT;
 #endif
 	}
+#if defined(USE_VK)
+	if (bChanged) for (u32 _i = 0; _i < VK_CB_MAX_WORKERS; ++_i) m_bChanged[_i] = true;
+#else
 	if (bChanged) m_bChanged = true;
+#endif
 }
 
 IC void dx10ConstantBuffer::seta(R_constant* C, R_constant_load& L, u32 e, const Fvector4& A)
@@ -185,13 +210,27 @@ IC void dx10ConstantBuffer::seta(R_constant* C, R_constant_load& L, u32 e, const
 	
 	if (it->x != A.x || it->y != A.y || it->z != A.z || it->w != A.w) {
 		it->set(A);
+#if defined(USE_VK)
+		for (u32 _i = 0; _i < VK_CB_MAX_WORKERS; ++_i) m_bChanged[_i] = true;
+#else
 		m_bChanged = true;
+#endif
 	}
 }
 
 IC void* dx10ConstantBuffer::AccessDirect(R_constant_load& L, u32 DataSize)
 {
 	VERIFY(L.index<(int)m_uiBufferSize);
+#if defined(USE_VK)
+const u32 workerId = g_vkWorkerId;
+BYTE* res = ((BYTE*)m_pBufferData[workerId]) + L.index;
+if ((u32)L.index + DataSize <= m_uiBufferSize)
+{
+for (u32 _i = 0; _i < VK_CB_MAX_WORKERS; ++_i) m_bChanged[_i] = true;
+return res;
+}
+else return 0;
+#else
 	BYTE* res = ((BYTE*)m_pBufferData) + L.index;
 
 	if ((u32)L.index + DataSize <= m_uiBufferSize)
@@ -202,6 +241,7 @@ IC void* dx10ConstantBuffer::AccessDirect(R_constant_load& L, u32 DataSize)
 		return res;
 	}
 	else return 0;
+#endif
 }
 
 #endif	//	dx10ConstantBuffer_impl_included

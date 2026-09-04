@@ -596,6 +596,7 @@ xcopy /Y /D "$(VULKAN_SDK)\Bin\shaderc_shared.dll" "$(xrGameDir)bin_dbg\$(Platfo
     <ClInclude Include="Resources\vk_ShaderReflection.h" />
     <ClInclude Include="Resources\vk_TextureUtils.h" />
     <ClInclude Include="rVK.h" />
+    <ClInclude Include="vk_DiagTimer.h" />
     <!--<ClInclude Include="R_Backend_LOD.h" />-->
     <ClInclude Include="SMAP_Allocator.h" />
     <ClInclude Include="stdafx.h" />
