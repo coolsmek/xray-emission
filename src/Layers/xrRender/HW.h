@@ -159,7 +159,9 @@ public:
     xr_vector<VkCommandBuffer> m_vkCmdBuffers;      // one per swapchain image
     xr_vector<VkCommandBuffer> m_vkGBufferStaticSecondary; // one per frame-in-flight slot (Increment 3+)
 
-    static constexpr uint32_t VK_GBUFFER_WORKERS = 2;
+    // Max concurrent G-Buffer recording workers. Must stay < dx10ConstantBuffer::VK_CB_MAX_WORKERS (16)
+    // since worker index feeds directly into per-worker cbuffer staging slots (g_vkWorkerId).
+    static constexpr uint32_t VK_GBUFFER_WORKERS = 15;
     std::vector<std::array<VkCommandPool,   VK_GBUFFER_WORKERS>> m_vkGBufferWorkerPools;      // [frame]
     std::vector<std::array<VkCommandBuffer, VK_GBUFFER_WORKERS>> m_vkGBufferWorkerSecondary;  // [frame]
 

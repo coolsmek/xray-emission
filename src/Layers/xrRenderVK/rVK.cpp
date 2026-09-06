@@ -294,6 +294,32 @@ static void vk_SetupGBufferSecondaryInheritance(
     beginInfo.pInheritanceInfo = &inheritance;
 }
 
+// Converts a contiguous [start,end) range over the *virtual* concatenation of
+// mapStaticPasses[0][0] then mapStaticPasses[0][1] into the (passBegin,passEnd,
+// packetBegin,packetEnd) form r_dsgraph_render_static_range expects. Mirrors the
+// existing 2-worker special-casing but works for any worker count/any split point,
+// including a chunk that straddles the pass0/pass1 boundary.
+static void vk_ResolveStaticRange(u32 start, u32 end, u32 count0,
+                                   u32& passBegin, u32& passEnd,
+                                   u32& packetBegin, u32& packetEnd)
+{
+    if (end <= count0)
+    {
+        passBegin = 0; passEnd = 1;
+        packetBegin = start; packetEnd = end;
+    }
+    else if (start >= count0)
+    {
+        passBegin = 1; passEnd = 2;
+        packetBegin = start - count0; packetEnd = end - count0;
+    }
+    else
+    {
+        passBegin = 0; passEnd = 2;
+        packetBegin = start; packetEnd = end - count0; // pass0 runs start..count0 implicitly (full tail)
+    }
+}
+
 struct GBufferStaticWorkerParams
 {
     uint32_t workerId;
@@ -514,7 +540,18 @@ void CRender::Render()
             const u32 count0 = (u32)GMBase.RGraph.mapStaticPasses[0][0].size();
             const u32 count1 = (u32)GMBase.RGraph.mapStaticPasses[0][1].size();
             const u32 totalPackets = count0 + count1;
-            const bool canUseMT = bMtRecord && (ttapi_GetWorkersCount() >= 2) && (totalPackets >= 32);
+
+            // Keep the "don't bother threading trivial workloads" guard, but scale the
+            // minimum with worker count instead of a flat 32 — otherwise a high core-count
+            // machine partitions a small scene into slivers that cost more in dispatch/
+            // join overhead than they save.
+            constexpr u32 kMinPacketsPerWorker = 16;
+            const u32 hwWorkers = ttapi_GetWorkersCount(); // total ttapi slots, incl. the one that runs inline on this thread
+            const u32 maxWorkers = _min(hwWorkers, CHW::VK_GBUFFER_WORKERS);
+            // Never create more workers than there are packets to hand out (avoids empty chunks).
+            const u32 workerCount = _min(maxWorkers, _max(1u, totalPackets / kMinPacketsPerWorker));
+            const bool canUseMT = bMtRecord && (maxWorkers >= 2) && (workerCount >= 2) &&
+                                  (totalPackets >= kMinPacketsPerWorker * 2);
 
             if (canUseMT)
             {
@@ -523,7 +560,7 @@ void CRender::Render()
                 u64 sortTicks = 0, joinTicks = 0, executeTicks = 0;
                 LARGE_INTEGER t0, t1;
 
-                // 1. Sort queues on main thread before workers begin (avoids concurrent sorting)
+                // 1. Sort queues on main thread before workers begin (unchanged from Inc.4)
                 if (g_vkMtDiagEnabled) QueryPerformanceCounter(&t0);
                 for (u32 iPass = 0; iPass < SHADER_PASSES_MAX; ++iPass)
                 {
@@ -538,32 +575,29 @@ void CRender::Render()
                 }
                 if (g_vkMtDiagEnabled) { QueryPerformanceCounter(&t1); sortTicks = (u64)(t1.QuadPart - t0.QuadPart); }
 
-                // 2. Partition across 2 workers
-                GBufferStaticWorkerParams params[2];
-                const u32 halfPackets = totalPackets / 2;
+                // 2. Partition into `workerCount` contiguous chunks over the virtual
+                //    concatenation of pass0+pass1 — remainder distributed to the first
+                //    chunks so no worker differs from another by more than 1 packet.
+                GBufferStaticWorkerParams params[CHW::VK_GBUFFER_WORKERS];
+                const u32 baseChunk = totalPackets / workerCount;
+                const u32 remainder = totalPackets % workerCount;
+                u32 cursor = 0;
+                for (u32 w = 0; w < workerCount; ++w)
+                {
+                    const u32 chunkSize = baseChunk + (w < remainder ? 1 : 0);
+                    const u32 start = cursor;
+                    const u32 end = cursor + chunkSize;
+                    cursor = end;
 
-                if (count0 > 0 && count1 > 0 && count0 <= (totalPackets * 3 / 4) && count1 <= (totalPackets * 3 / 4))
-                {
-                    params[0] = { 0, frameSlot, 0, 0, 1, 0, u32(-1), Target, &GMBase };
-                    params[1] = { 1, frameSlot, 0, 1, 2, 0, u32(-1), Target, &GMBase };
-                }
-                else if (count1 == 0)
-                {
-                    const u32 mid = count0 / 2;
-                    params[0] = { 0, frameSlot, 0, 0, 1, 0, mid, Target, &GMBase };
-                    params[1] = { 1, frameSlot, 0, 0, 1, mid, count0, Target, &GMBase };
-                }
-                else
-                {
-                    const u32 mid = _min(halfPackets, count0);
-                    params[0] = { 0, frameSlot, 0, 0, 1, 0, mid, Target, &GMBase };
-                    params[1] = { 1, frameSlot, 0, 0, 2, mid, count1, Target, &GMBase };
+                    u32 passBegin, passEnd, packetBegin, packetEnd;
+                    vk_ResolveStaticRange(start, end, count0, passBegin, passEnd, packetBegin, packetEnd);
+                    params[w] = { w, frameSlot, 0, passBegin, passEnd, packetBegin, packetEnd, Target, &GMBase };
                 }
 
                 // 3. Dispatch to ttapi workers and join
                 if (g_vkMtDiagEnabled) QueryPerformanceCounter(&t0);
-                ttapi_AddWorker(GBufferStaticWorker, &params[0]);
-                ttapi_AddWorker(GBufferStaticWorker, &params[1]);
+                for (u32 w = 0; w < workerCount; ++w)
+                    ttapi_AddWorker(GBufferStaticWorker, &params[w]);
                 ttapi_RunAllWorkers();
                 if (g_vkMtDiagEnabled) { QueryPerformanceCounter(&t1); joinTicks = (u64)(t1.QuadPart - t0.QuadPart); }
 
@@ -571,99 +605,94 @@ void CRender::Render()
                 RCache.m_ctx = &g_vkPrimaryContext;
                 RCache.SetActiveCommandBuffer(cmd);
 
-                // Aggregate worker descriptor stats
-                for (uint32_t w = 0; w < CHW::VK_GBUFFER_WORKERS; ++w)
+                // 5. Aggregate worker stats — IMPORTANT: loop bound is `workerCount` (this
+                //    frame's actual dispatch count), NOT CHW::VK_GBUFFER_WORKERS. Contexts
+                //    are persistent globals; if workerCount varies frame-to-frame (e.g. a
+                //    scene dips below the MT threshold), stale higher-index contexts must
+                //    NOT be re-aggregated/re-reset here.
+                for (uint32_t w = 0; w < workerCount; ++w)
                 {
                     g_vkPrimaryContext.s_sets_built  += g_vkWorkerContexts[w].s_sets_built;
                     g_vkPrimaryContext.s_sets_reused += g_vkWorkerContexts[w].s_sets_reused;
                     g_vkPrimaryContext.s_binds       += g_vkWorkerContexts[w].s_binds;
+                    g_vkPrimaryContext.diag_pipeHits += g_vkWorkerContexts[w].diag_pipeHits;
+                    g_vkPrimaryContext.diag_pipeMisses += g_vkWorkerContexts[w].diag_pipeMisses;
+                    g_vkPrimaryContext.diag_pipeCompiles += g_vkWorkerContexts[w].diag_pipeCompiles;
                     RCache.stat.vs                   += g_vkWorkerContexts[w].stat_vs;
                     RCache.stat.ps                   += g_vkWorkerContexts[w].stat_ps;
-                    
+
                     RCache.stat.r.s_static.verts += g_vkWorkerContexts[w].stat_r.s_static.verts;
-                    RCache.stat.r.s_static.dips += g_vkWorkerContexts[w].stat_r.s_static.dips;
+                    RCache.stat.r.s_static.dips  += g_vkWorkerContexts[w].stat_r.s_static.dips;
                     RCache.stat.r.s_flora.verts += g_vkWorkerContexts[w].stat_r.s_flora.verts;
-                    RCache.stat.r.s_flora.dips += g_vkWorkerContexts[w].stat_r.s_flora.dips;
+                    RCache.stat.r.s_flora.dips  += g_vkWorkerContexts[w].stat_r.s_flora.dips;
                     RCache.stat.r.s_flora_lods.verts += g_vkWorkerContexts[w].stat_r.s_flora_lods.verts;
-                    RCache.stat.r.s_flora_lods.dips += g_vkWorkerContexts[w].stat_r.s_flora_lods.dips;
+                    RCache.stat.r.s_flora_lods.dips  += g_vkWorkerContexts[w].stat_r.s_flora_lods.dips;
                     RCache.stat.r.s_details.verts += g_vkWorkerContexts[w].stat_r.s_details.verts;
-                    RCache.stat.r.s_details.dips += g_vkWorkerContexts[w].stat_r.s_details.dips;
+                    RCache.stat.r.s_details.dips  += g_vkWorkerContexts[w].stat_r.s_details.dips;
                     RCache.stat.r.s_dynamic.verts += g_vkWorkerContexts[w].stat_r.s_dynamic.verts;
-                    RCache.stat.r.s_dynamic.dips += g_vkWorkerContexts[w].stat_r.s_dynamic.dips;
+                    RCache.stat.r.s_dynamic.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic.dips;
                     RCache.stat.r.s_dynamic_sw.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_sw.verts;
-                    RCache.stat.r.s_dynamic_sw.dips += g_vkWorkerContexts[w].stat_r.s_dynamic_sw.dips;
+                    RCache.stat.r.s_dynamic_sw.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_sw.dips;
                     RCache.stat.r.s_dynamic_inst.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_inst.verts;
-                    RCache.stat.r.s_dynamic_inst.dips += g_vkWorkerContexts[w].stat_r.s_dynamic_inst.dips;
+                    RCache.stat.r.s_dynamic_inst.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_inst.dips;
                     RCache.stat.r.s_dynamic_1B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_1B.verts;
-                    RCache.stat.r.s_dynamic_1B.dips += g_vkWorkerContexts[w].stat_r.s_dynamic_1B.dips;
+                    RCache.stat.r.s_dynamic_1B.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_1B.dips;
                     RCache.stat.r.s_dynamic_2B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_2B.verts;
-                    RCache.stat.r.s_dynamic_2B.dips += g_vkWorkerContexts[w].stat_r.s_dynamic_2B.dips;
+                    RCache.stat.r.s_dynamic_2B.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_2B.dips;
                     RCache.stat.r.s_dynamic_3B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_3B.verts;
-                    RCache.stat.r.s_dynamic_3B.dips += g_vkWorkerContexts[w].stat_r.s_dynamic_3B.dips;
+                    RCache.stat.r.s_dynamic_3B.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_3B.dips;
                     RCache.stat.r.s_dynamic_4B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_4B.verts;
-                    RCache.stat.r.s_dynamic_4B.dips += g_vkWorkerContexts[w].stat_r.s_dynamic_4B.dips;
-                    
-                    g_vkWorkerContexts[w].s_sets_built  = 0;
-                    g_vkWorkerContexts[w].s_sets_reused = 0;
-                    g_vkWorkerContexts[w].s_binds       = 0;
-                    g_vkWorkerContexts[w].stat_vs       = 0;
-                    g_vkWorkerContexts[w].stat_ps       = 0;
-                    
-                    g_vkWorkerContexts[w].stat_r.s_static.verts = 0;
-                    g_vkWorkerContexts[w].stat_r.s_static.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_flora.verts = 0;
-                    g_vkWorkerContexts[w].stat_r.s_flora.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_flora_lods.verts = 0;
-                    g_vkWorkerContexts[w].stat_r.s_flora_lods.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_details.verts = 0;
-                    g_vkWorkerContexts[w].stat_r.s_details.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic.verts = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_sw.verts = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_sw.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_inst.verts = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_inst.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_1B.verts = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_1B.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_2B.verts = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_2B.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_3B.verts = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_3B.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_4B.verts = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_4B.dips = 0;
+                    RCache.stat.r.s_dynamic_4B.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_4B.dips;
+
+                    g_vkWorkerContexts[w].s_sets_built = g_vkWorkerContexts[w].s_sets_reused = g_vkWorkerContexts[w].s_binds = 0;
+                    g_vkWorkerContexts[w].diag_pipeHits = g_vkWorkerContexts[w].diag_pipeMisses = g_vkWorkerContexts[w].diag_pipeCompiles = 0;
+                    g_vkWorkerContexts[w].stat_vs = g_vkWorkerContexts[w].stat_ps = 0;
+                    g_vkWorkerContexts[w].stat_r.s_static.verts = g_vkWorkerContexts[w].stat_r.s_static.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_flora.verts = g_vkWorkerContexts[w].stat_r.s_flora.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_flora_lods.verts = g_vkWorkerContexts[w].stat_r.s_flora_lods.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_details.verts = g_vkWorkerContexts[w].stat_r.s_details.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic.verts = g_vkWorkerContexts[w].stat_r.s_dynamic.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_sw.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_sw.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_inst.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_inst.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_1B.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_1B.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_2B.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_2B.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_3B.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_3B.dips = 0;
+                    g_vkWorkerContexts[w].stat_r.s_dynamic_4B.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_4B.dips = 0;
                 }
 
-                // 5. Execute both secondaries in chunk order
+                // 6. Execute all secondaries IN CHUNK ORDER — chunk order == ascending
+                //    worker index == the order the sorted queue was sliced in. This must
+                //    be preserved: the sort upstream produced state-coherent adjacency,
+                //    and out-of-order execution would reintroduce redundant pipeline/
+                //    descriptor rebinds at chunk boundaries (defeats this increment's
+                //    "cache hit rate stays flat" check).
                 if (g_vkMtDiagEnabled) QueryPerformanceCounter(&t0);
-                VkCommandBuffer secs[2] = {
-                    HW.m_vkGBufferWorkerSecondary[frameSlot][0],
-                    HW.m_vkGBufferWorkerSecondary[frameSlot][1]
-                };
-                vkCmdExecuteCommands(cmd, 2, secs);
+                VkCommandBuffer secs[CHW::VK_GBUFFER_WORKERS];
+                for (u32 w = 0; w < workerCount; ++w)
+                    secs[w] = HW.m_vkGBufferWorkerSecondary[frameSlot][w];
+                vkCmdExecuteCommands(cmd, workerCount, secs);
                 if (g_vkMtDiagEnabled) { QueryPerformanceCounter(&t1); executeTicks = (u64)(t1.QuadPart - t0.QuadPart); }
 
-                // 6. Clear static queues on main thread post-join
+                // 7. Clear static queues on main thread post-join
                 for (u32 iPass = 0; iPass < SHADER_PASSES_MAX; ++iPass)
-                {
                     GMBase.RGraph.mapStaticPasses[0][iPass].clear();
-                }
 
                 if (g_vkMtDiagEnabled)
                 {
                     LARGE_INTEGER freq; QueryPerformanceFrequency(&freq);
                     auto ms = [&](u64 ticks){ return 1000.0 * (double)ticks / (double)freq.QuadPart; };
-                    for (u32 w = 0; w < CHW::VK_GBUFFER_WORKERS; ++w)
+                    for (u32 w = 0; w < workerCount; ++w)
                     {
                         auto& c = g_vkWorkerContexts[w];
-                        Msg("VK MT DIAG f%u W%u: record=%.3fms lockWait[desc=%.3fms pipe=%.3fms] calls[desc=%u unif=%u pipeHit=%u pipeMiss=%u pipeCompile=%u]",
-                            Device.dwFrame, w, ms(c.diag_recordTicks),
+                        Msg("VK MT DIAG f%u W%u/%u: record=%.3fms lockWait[desc=%.3fms pipe=%.3fms] calls[desc=%u unif=%u pipeHit=%u pipeMiss=%u pipeCompile=%u]",
+                            Device.dwFrame, w, workerCount, ms(c.diag_recordTicks),
                             ms(c.diag_lockWaitTicks_desc), ms(c.diag_lockWaitTicks_pipe),
                             c.diag_descCalls, c.diag_uniformCalls, c.diag_pipeHits, c.diag_pipeMisses, c.diag_pipeCompiles);
                         c.diag_recordTicks = c.diag_lockWaitTicks_desc = c.diag_lockWaitTicks_pipe = 0;
                         c.diag_descCalls = c.diag_uniformCalls = c.diag_pipeHits = c.diag_pipeMisses = c.diag_pipeCompiles = 0;
                     }
-                    Msg("VK MT DIAG f%u: sort=%.3fms join=%.3fms execute=%.3fms",
-                        Device.dwFrame, ms(sortTicks), ms(joinTicks), ms(executeTicks));
+                    Msg("VK MT DIAG f%u: workers=%u sort=%.3fms join=%.3fms execute=%.3fms",
+                        Device.dwFrame, workerCount, ms(sortTicks), ms(joinTicks), ms(executeTicks));
                 }
             }
             else
@@ -787,6 +816,19 @@ void CRender::Render()
         Msg("  VK-RENDER f%u vis=%.2f gbuf=%.2f [stat=%.2f dyn=%.2f hud=%.2f lods=%.2f] shadow=%.2f combine=%.2f | draws=%u verts=%u polys=%u",
             Device.dwFrame, msVis, msGBuf, msStatic, msDyn, msHud, msLods, msShadow, msCombine,
             RCache.stat.calls, RCache.stat.verts, RCache.stat.polys);
+
+    static bool s_pipeStats = !!strstr(Core.Params, "-vk_pipe_stats");
+    if (s_pipeStats) {
+        Msg("VK PIPE STATS f%u: %u hits, %u misses, %u compiles", Device.dwFrame, 
+            g_vkPrimaryContext.diag_pipeHits, g_vkPrimaryContext.diag_pipeMisses, g_vkPrimaryContext.diag_pipeCompiles);
+    }
+    static bool s_descStats = !!strstr(Core.Params, "-vk_desc_stats");
+    if (s_descStats) {
+        Msg("VK DESC STATS f%u: %u built, %u reused, %u binds", Device.dwFrame, 
+            g_vkPrimaryContext.s_sets_built, g_vkPrimaryContext.s_sets_reused, g_vkPrimaryContext.s_binds);
+    }
+    g_vkPrimaryContext.diag_pipeHits = g_vkPrimaryContext.diag_pipeMisses = g_vkPrimaryContext.diag_pipeCompiles = 0;
+    g_vkPrimaryContext.s_sets_built = g_vkPrimaryContext.s_sets_reused = g_vkPrimaryContext.s_binds = 0;
 }
 
 // ── Skeleton Wallmarks ──────────────────────────────────────────────────────────

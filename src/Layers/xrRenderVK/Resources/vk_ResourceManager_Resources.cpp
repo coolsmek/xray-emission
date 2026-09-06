@@ -487,32 +487,32 @@ void CResourceManager::_DeleteConstantTable(const R_constant_table* C)
 CRT* CResourceManager::_CreateRT(LPCSTR Name, u32 w, u32 h, D3DFORMAT f, u32 SampleCount, bool useUAV)
 {
 #ifdef VK_ENABLE_TESTS
-    if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CResourceManager::_CreateRT: %s", Name); xrLogger::FlushLog(); }
+    if (strstr(Core.Params, "-vkdebug_resource_manager")) { Msg("~ VK DEBUG CResourceManager::_CreateRT: %s", Name); xrLogger::FlushLog(); }
 #endif
     R_ASSERT(Name && Name[0] && w && h);
 
     LPSTR N = LPSTR(Name);
 #ifdef VK_ENABLE_TESTS
-    if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CResourceManager::_CreateRT: locking creationGuard"); xrLogger::FlushLog(); }
+    if (strstr(Core.Params, "-vkdebug_resource_manager")) { Msg("~ VK DEBUG CResourceManager::_CreateRT: locking creationGuard"); xrLogger::FlushLog(); }
 #endif
     xrCriticalSectionGuard guard(creationGuard);
 
 #ifdef VK_ENABLE_TESTS
-    if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CResourceManager::_CreateRT: searching m_rtargets"); xrLogger::FlushLog(); }
+    if (strstr(Core.Params, "-vkdebug_resource_manager")) { Msg("~ VK DEBUG CResourceManager::_CreateRT: searching m_rtargets"); xrLogger::FlushLog(); }
 #endif
     map_RT::iterator I = m_rtargets.find(N);
     if (I != m_rtargets.end()) return I->second;
     else
     {
 #ifdef VK_ENABLE_TESTS
-        if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CResourceManager::_CreateRT: allocating new CRT"); xrLogger::FlushLog(); }
+        if (strstr(Core.Params, "-vkdebug_resource_manager")) { Msg("~ VK DEBUG CResourceManager::_CreateRT: allocating new CRT"); xrLogger::FlushLog(); }
 #endif
         CRT* RT = xr_new<CRT>();
         RT->dwFlags |= xr_resource_flagged::RF_REGISTERED;
         m_rtargets.insert(mk_pair(RT->set_name(Name), RT));
         if (Device.b_is_Ready) {
 #ifdef VK_ENABLE_TESTS
-            if (strstr(Core.Params, "-vkdebug")) { Msg("~ VK DEBUG CResourceManager::_CreateRT: calling RT->create"); xrLogger::FlushLog(); }
+            if (strstr(Core.Params, "-vkdebug_resource_manager")) { Msg("~ VK DEBUG CResourceManager::_CreateRT: calling RT->create"); xrLogger::FlushLog(); }
 #endif
             RT->create(Name, w, h, f, SampleCount);
         }
@@ -628,14 +628,14 @@ CTexture* CResourceManager::_CreateTexture(LPCSTR _Name)
             static DWORD this_thread_id = 0;
             this_thread_id = GetCurrentThreadId();
 #ifdef VK_ENABLE_TESTS
-            if (strstr(Core.Params, "-vkdebug"))
+            if (strstr(Core.Params, "-vkdebug_texture_load"))
                 Msg("VK DEBUG Queuing texture load for: %s", *T->cName);
 #endif
             textures_load_tasks.run([=]()
             {
                 if (this_thread_id != GetCurrentThreadId()) { PROF_THREAD("X-Ray PPL Thread") }
 #ifdef VK_ENABLE_TESTS 
-                if (strstr(Core.Params, "-vkdebug"))
+                if (strstr(Core.Params, "-vkdebug_texture_load"))
                     Msg("VK DEBUG Starting thread texture load for: %s", *T->cName); 
 #endif
 

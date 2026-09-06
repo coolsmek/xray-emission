@@ -188,18 +188,6 @@ void vk_PipelineCacheManager::ResetDynamicStateCache(VkRecordContext* ctx)
 
 VkPipeline vk_PipelineCacheManager::BindCurrentState(VkCommandBuffer cmdBuffer, VkRecordContext* ctx)
 {
-    static u32 s_lastFrame = 0;
-    static std::atomic<u32> s_pipes_issued(0);
-    static std::atomic<u32> s_pipes_skipped(0);
-    static bool s_pipeStats = !!strstr(Core.Params, "-vk_pipe_stats");
-    if (s_pipeStats && s_lastFrame != Device.dwFrame) {
-        if (s_lastFrame != 0)
-            Msg("VK PIPE STATS f%u: %u issued, %u skipped", s_lastFrame, s_pipes_issued.load(), s_pipes_skipped.load());
-        s_pipes_issued = 0;
-        s_pipes_skipped = 0;
-        s_lastFrame = Device.dwFrame;
-    }
-
     auto ApplyDynamicStates = [&](VkPipeline pipeline) {
         if (cmdBuffer != VK_NULL_HANDLE && pipeline != VK_NULL_HANDLE)
         {
@@ -263,7 +251,6 @@ VkPipeline vk_PipelineCacheManager::BindCurrentState(VkCommandBuffer cmdBuffer, 
     if (!ctx->m_pipelineDirty && ctx->m_hasLastDesc)
     {
         if (ctx) ctx->diag_pipeHits++;
-        s_pipes_skipped++;
 #ifdef DEBUG
         vk_PipelineStateDesc debugDesc = {};
         debugDesc.vs = ctx->vs;
@@ -292,8 +279,6 @@ VkPipeline vk_PipelineCacheManager::BindCurrentState(VkCommandBuffer cmdBuffer, 
 
         return ctx->m_lastBoundEntry ? ctx->m_lastBoundEntry->pipeline : VK_NULL_HANDLE;
     }
-
-    s_pipes_issued++;
 
     vk_PipelineStateDesc desc = {};
     desc.vs = ctx->vs;

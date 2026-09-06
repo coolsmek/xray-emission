@@ -381,4 +381,65 @@ VK_TEST(Layer5_MT, WorkerXformSeed_ReResolvesAfterUnmap)
     return true;
 }
 
+// Pure-logic unit test for vk_ResolveStaticRange
+// To test the logic without exposing the static function from rVK.cpp, we replicate it here.
+static void test_vk_ResolveStaticRange(u32 start, u32 end, u32 count0,
+                                   u32& passBegin, u32& passEnd,
+                                   u32& packetBegin, u32& packetEnd)
+{
+    if (end <= count0)
+    {
+        passBegin = 0; passEnd = 1;
+        packetBegin = start; packetEnd = end;
+    }
+    else if (start >= count0)
+    {
+        passBegin = 1; passEnd = 2;
+        packetBegin = start - count0; packetEnd = end - count0;
+    }
+    else
+    {
+        passBegin = 0; passEnd = 2;
+        packetBegin = start; packetEnd = end - count0; // pass0 runs start..count0 implicitly (full tail)
+    }
+}
+
+VK_TEST(Layer5_MT, vk_ResolveStaticRange_Logic)
+{
+    u32 passBegin, passEnd, packetBegin, packetEnd;
+
+    // Case 1: Fully inside pass0
+    test_vk_ResolveStaticRange(0, 10, 20, passBegin, passEnd, packetBegin, packetEnd);
+    VK_EXPECT(passBegin == 0 && passEnd == 1 && packetBegin == 0 && packetEnd == 10);
+
+    // Case 2: Fully inside pass1
+    test_vk_ResolveStaticRange(25, 30, 20, passBegin, passEnd, packetBegin, packetEnd);
+    VK_EXPECT(passBegin == 1 && passEnd == 2 && packetBegin == 5 && packetEnd == 10);
+
+    // Case 3: Spanning both passes
+    test_vk_ResolveStaticRange(15, 25, 20, passBegin, passEnd, packetBegin, packetEnd);
+    VK_EXPECT(passBegin == 0 && passEnd == 2 && packetBegin == 15 && packetEnd == 5);
+
+    // Case 4: Remainder distribution simulation
+    // Say we have 33 total packets, count0=20, count1=13. 4 workers.
+    // baseChunk = 33/4 = 8. remainder = 1.
+    // w=0: 0..9 (size 9) -> fully pass0
+    test_vk_ResolveStaticRange(0, 9, 20, passBegin, passEnd, packetBegin, packetEnd);
+    VK_EXPECT(passBegin == 0 && passEnd == 1 && packetBegin == 0 && packetEnd == 9);
+
+    // w=1: 9..17 (size 8) -> fully pass0
+    test_vk_ResolveStaticRange(9, 17, 20, passBegin, passEnd, packetBegin, packetEnd);
+    VK_EXPECT(passBegin == 0 && passEnd == 1 && packetBegin == 9 && packetEnd == 17);
+
+    // w=2: 17..25 (size 8) -> spanning
+    test_vk_ResolveStaticRange(17, 25, 20, passBegin, passEnd, packetBegin, packetEnd);
+    VK_EXPECT(passBegin == 0 && passEnd == 2 && packetBegin == 17 && packetEnd == 5);
+
+    // w=3: 25..33 (size 8) -> fully pass1
+    test_vk_ResolveStaticRange(25, 33, 20, passBegin, passEnd, packetBegin, packetEnd);
+    VK_EXPECT(passBegin == 1 && passEnd == 2 && packetBegin == 5 && packetEnd == 13);
+
+    return true;
+}
+
 #endif // VK_ENABLE_TESTS

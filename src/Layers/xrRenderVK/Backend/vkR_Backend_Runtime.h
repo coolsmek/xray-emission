@@ -47,7 +47,7 @@ struct VkRecordContext {
 
     // -vk_mt_diag instrumentation (zero-cost when flag is off)
     u64 diag_recordTicks       = 0;  // wall time this worker spent in GBufferStaticWorker
-    u64 diag_lockWaitTicks_desc = 0; // ticks blocked acquiring vk_DescriptorManager::m_mutex
+    u64 diag_lockWaitTicks_desc = 0; // ticks blocked acquiring vk_DescriptorManager's cache-shard mutex
     u64 diag_lockWaitTicks_pipe = 0; // ticks blocked acquiring vk_PipelineCache::m_mutex/m_compileMutex
     u32 diag_descCalls    = 0;  // FindCachedSet + InsertCachedSet calls
     u32 diag_uniformCalls = 0;  // AllocateDynamicUniform calls
@@ -761,20 +761,7 @@ IC void vk_FlushDescriptors(VkCommandBuffer cmd)
         }
     }
 
-    static u32 s_lastFrame = 0;
-    static bool s_descStats = !!strstr(Core.Params, "-vk_desc_stats");
-    if (s_descStats && s_lastFrame != Device.dwFrame) {
-        if (s_lastFrame != 0) {
-            u32 t_built = g_vkPrimaryContext.s_sets_built;
-            u32 t_reused = g_vkPrimaryContext.s_sets_reused;
-            u32 t_binds = g_vkPrimaryContext.s_binds;
-            Msg("VK DESC STATS f%u: %u built, %u reused, %u binds", s_lastFrame, t_built, t_reused, t_binds);
-        }
-        g_vkPrimaryContext.s_sets_built = 0;
-        g_vkPrimaryContext.s_sets_reused = 0;
-        g_vkPrimaryContext.s_binds = 0;
-        s_lastFrame = Device.dwFrame;
-    }
+
 
     // Early out removed: we must always run Step 1 and 2 to ensure we don't skip
     // updating dynamic offsets if the shader bound a DIFFERENT, but already-flushed

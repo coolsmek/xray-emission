@@ -29,7 +29,7 @@ int vk_TestRegistry::RunAll()
         if (!passed) ++failures;
     }
     Msg("* [VK_TEST] %d failure(s)", failures);
-    R_ASSERT2(failures == 0, "VK regression tests FAILED — see log above");
+    R_ASSERT2(failures == 0, "VK regression tests FAILED -> see log above");
     return failures;
 }
 #endif // VK_ENABLE_TESTS
