@@ -105,6 +105,10 @@ struct VkRecordContext {
     R_hemi hemi;
     R_tree tree;
     
+    float o_hemi = 0.f;
+    float o_hemi_cube[6] = {};
+    float o_sun = 0.f;
+    
     // Stats accumulators
     u64 stat_calls = 0, stat_verts = 0, stat_polys = 0, stat_vs = 0, stat_ps = 0;
     u32 s_sets_built = 0, s_sets_reused = 0, s_binds = 0;

@@ -162,8 +162,11 @@ public:
     // Max concurrent G-Buffer recording workers. Must stay < dx10ConstantBuffer::VK_CB_MAX_WORKERS (16)
     // since worker index feeds directly into per-worker cbuffer staging slots (g_vkWorkerId).
     static constexpr uint32_t VK_GBUFFER_WORKERS = 15;
-    std::vector<std::array<VkCommandPool,   VK_GBUFFER_WORKERS>> m_vkGBufferWorkerPools;      // [frame]
-    std::vector<std::array<VkCommandBuffer, VK_GBUFFER_WORKERS>> m_vkGBufferWorkerSecondary;  // [frame]
+    std::vector<std::array<VkCommandPool,   VK_GBUFFER_WORKERS>> m_vkGBufferWorkerPools;          // [frame]
+    std::vector<std::array<VkCommandBuffer, VK_GBUFFER_WORKERS>> m_vkGBufferWorkerSecondary;      // [frame]
+
+    std::vector<std::array<VkCommandPool,   VK_GBUFFER_WORKERS>> m_vkGBufferDynWorkerPools;       // [frame]
+    std::vector<std::array<VkCommandBuffer, VK_GBUFFER_WORKERS>> m_vkGBufferDynWorkerSecondary;   // [frame]
 
     // ── Synchronisation (double-buffered) ─────────────────────────────────────
     static constexpr uint32_t MAX_FRAMES_IN_FLIGHT  = 2;

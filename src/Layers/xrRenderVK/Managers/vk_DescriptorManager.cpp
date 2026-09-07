@@ -128,6 +128,17 @@ void vk_DescriptorManager::CreateDynamicUniformBuffers(VkPhysicalDevice physDevi
         else
             Msg("! vk_DescriptorManager: Failed to create dynamic uniform buffer[%u] (%d)", i, (int)res);
     }
+
+    // Context 0's reserve is fixed/constant — never depends on -vk_mt_record or
+    // ttapi readiness, so seed it immediately rather than waiting on
+    // EnsureContextLayout() (which is deferred to first BeginFrame() because the
+    // *worker* slice split does need Core.Params/ttapi to be ready). Without this,
+    // any code path that calls AllocateDynamicUniform before the first real
+    // BeginFrame() (e.g. the VK unit-test suite) sees slot 0 sized to zero and
+    // silently fails.
+    m_sliceBase[0]     = 0;
+    m_sliceCapacity[0] = kPrimaryReserveBytes;
+    m_sliceOffset[0]   = 0;
 }
 
 void vk_DescriptorManager::EnsureContextLayout()

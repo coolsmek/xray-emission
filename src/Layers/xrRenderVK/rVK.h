@@ -165,9 +165,6 @@ public:
 
     shared_str c_sbase;
     shared_str c_lmaterial;
-    float o_hemi;
-    float o_hemi_cube[CROS_impl::NUM_FACES];
-    float o_sun;
 
     bool m_bMakeAsyncSS;
     bool m_bFirstFrameAfterReset;
@@ -226,8 +223,8 @@ public:
         if (0 == O->renderable_ROS()) return;
         CROS_impl& LT = *((CROS_impl*)O->renderable_ROS());
         LT.update_smooth(O);
-        o_hemi = 0.75f * LT.get_hemi();
-        o_sun = 0.75f * LT.get_sun();
+        RCache.m_ctx->o_hemi = 0.75f * LT.get_hemi();
+        RCache.m_ctx->o_sun = 0.75f * LT.get_sun();
         //--DSR-- HeatVision_start
         RCache.m_ctx->hemi.set_hotness(O->GetHotness(), O->GetTransparency(), 0.f, 0.f);
         RCache.m_ctx->hemi.set_glowing(
@@ -235,7 +232,7 @@ public:
             sil_glow_color.y,
             sil_glow_color.z, O->GetGlowing());
         //--DSR-- HeatVision_end
-        CopyMemory(o_hemi_cube, LT.get_hemi_cube(), CROS_impl::NUM_FACES*sizeof(float));
+        CopyMemory(RCache.m_ctx->o_hemi_cube, LT.get_hemi_cube(), CROS_impl::NUM_FACES*sizeof(float));
     }
 
     IC void apply_lmaterial()
@@ -247,9 +244,9 @@ public:
         CTexture* T = RCache.get_ActiveTexture(u32(C->samp.index));
         VERIFY(T);
         float mtl = T ? T->m_material : 0.f;
-        RCache.m_ctx->hemi.set_material(o_hemi, mtl, 0, (mtl + .5f) / 4.f);
-        RCache.m_ctx->hemi.set_pos_faces(o_hemi_cube[CROS_impl::CUBE_FACE_POS_X], o_hemi_cube[CROS_impl::CUBE_FACE_POS_Y], o_hemi_cube[CROS_impl::CUBE_FACE_POS_Z]);
-        RCache.m_ctx->hemi.set_neg_faces(o_hemi_cube[CROS_impl::CUBE_FACE_NEG_X], o_hemi_cube[CROS_impl::CUBE_FACE_NEG_Y], o_hemi_cube[CROS_impl::CUBE_FACE_NEG_Z]);
+        RCache.m_ctx->hemi.set_material(RCache.m_ctx->o_hemi, mtl, 0, (mtl + .5f) / 4.f);
+        RCache.m_ctx->hemi.set_pos_faces(RCache.m_ctx->o_hemi_cube[CROS_impl::CUBE_FACE_POS_X], RCache.m_ctx->o_hemi_cube[CROS_impl::CUBE_FACE_POS_Y], RCache.m_ctx->o_hemi_cube[CROS_impl::CUBE_FACE_POS_Z]);
+        RCache.m_ctx->hemi.set_neg_faces(RCache.m_ctx->o_hemi_cube[CROS_impl::CUBE_FACE_NEG_X], RCache.m_ctx->o_hemi_cube[CROS_impl::CUBE_FACE_NEG_Y], RCache.m_ctx->o_hemi_cube[CROS_impl::CUBE_FACE_NEG_Z]);
     }
     // ── IRender_interface — core frame pump ───────────────────────────────
     virtual void        Render();

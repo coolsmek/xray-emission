@@ -268,7 +268,79 @@ void CRender::render_menu()
     //RCache.set_ZB(nullptr);
 }
 
-// ─── Multithreaded Static G-Buffer Recording Helpers ──────────────────────────
+// ─── Multithreaded G-Buffer Recording Helpers ──────────────────────────
+
+static void vk_AggregateAndResetWorkerStats(uint32_t workerCount)
+{
+    for (uint32_t w = 0; w < workerCount; ++w)
+    {
+        g_vkPrimaryContext.s_sets_built  += g_vkWorkerContexts[w].s_sets_built;
+        g_vkPrimaryContext.s_sets_reused += g_vkWorkerContexts[w].s_sets_reused;
+        g_vkPrimaryContext.s_binds       += g_vkWorkerContexts[w].s_binds;
+        g_vkPrimaryContext.diag_pipeHits += g_vkWorkerContexts[w].diag_pipeHits;
+        g_vkPrimaryContext.diag_pipeMisses += g_vkWorkerContexts[w].diag_pipeMisses;
+        g_vkPrimaryContext.diag_pipeCompiles += g_vkWorkerContexts[w].diag_pipeCompiles;
+        RCache.stat.vs                   += g_vkWorkerContexts[w].stat_vs;
+        RCache.stat.ps                   += g_vkWorkerContexts[w].stat_ps;
+
+        RCache.stat.r.s_static.verts += g_vkWorkerContexts[w].stat_r.s_static.verts;
+        RCache.stat.r.s_static.dips  += g_vkWorkerContexts[w].stat_r.s_static.dips;
+        RCache.stat.r.s_flora.verts += g_vkWorkerContexts[w].stat_r.s_flora.verts;
+        RCache.stat.r.s_flora.dips  += g_vkWorkerContexts[w].stat_r.s_flora.dips;
+        RCache.stat.r.s_flora_lods.verts += g_vkWorkerContexts[w].stat_r.s_flora_lods.verts;
+        RCache.stat.r.s_flora_lods.dips  += g_vkWorkerContexts[w].stat_r.s_flora_lods.dips;
+        RCache.stat.r.s_details.verts += g_vkWorkerContexts[w].stat_r.s_details.verts;
+        RCache.stat.r.s_details.dips  += g_vkWorkerContexts[w].stat_r.s_details.dips;
+        RCache.stat.r.s_dynamic.verts += g_vkWorkerContexts[w].stat_r.s_dynamic.verts;
+        RCache.stat.r.s_dynamic.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic.dips;
+        RCache.stat.r.s_dynamic_sw.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_sw.verts;
+        RCache.stat.r.s_dynamic_sw.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_sw.dips;
+        RCache.stat.r.s_dynamic_inst.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_inst.verts;
+        RCache.stat.r.s_dynamic_inst.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_inst.dips;
+        RCache.stat.r.s_dynamic_1B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_1B.verts;
+        RCache.stat.r.s_dynamic_1B.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_1B.dips;
+        RCache.stat.r.s_dynamic_2B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_2B.verts;
+        RCache.stat.r.s_dynamic_2B.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_2B.dips;
+        RCache.stat.r.s_dynamic_3B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_3B.verts;
+        RCache.stat.r.s_dynamic_3B.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_3B.dips;
+        RCache.stat.r.s_dynamic_4B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_4B.verts;
+        RCache.stat.r.s_dynamic_4B.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_4B.dips;
+
+        g_vkWorkerContexts[w].s_sets_built = g_vkWorkerContexts[w].s_sets_reused = g_vkWorkerContexts[w].s_binds = 0;
+        g_vkWorkerContexts[w].diag_pipeHits = g_vkWorkerContexts[w].diag_pipeMisses = g_vkWorkerContexts[w].diag_pipeCompiles = 0;
+        g_vkWorkerContexts[w].stat_vs = g_vkWorkerContexts[w].stat_ps = 0;
+        g_vkWorkerContexts[w].stat_r.s_static.verts = g_vkWorkerContexts[w].stat_r.s_static.dips = 0;
+        g_vkWorkerContexts[w].stat_r.s_flora.verts = g_vkWorkerContexts[w].stat_r.s_flora.dips = 0;
+        g_vkWorkerContexts[w].stat_r.s_flora_lods.verts = g_vkWorkerContexts[w].stat_r.s_flora_lods.dips = 0;
+        g_vkWorkerContexts[w].stat_r.s_details.verts = g_vkWorkerContexts[w].stat_r.s_details.dips = 0;
+        g_vkWorkerContexts[w].stat_r.s_dynamic.verts = g_vkWorkerContexts[w].stat_r.s_dynamic.dips = 0;
+        g_vkWorkerContexts[w].stat_r.s_dynamic_sw.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_sw.dips = 0;
+        g_vkWorkerContexts[w].stat_r.s_dynamic_inst.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_inst.dips = 0;
+        g_vkWorkerContexts[w].stat_r.s_dynamic_1B.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_1B.dips = 0;
+        g_vkWorkerContexts[w].stat_r.s_dynamic_2B.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_2B.dips = 0;
+        g_vkWorkerContexts[w].stat_r.s_dynamic_3B.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_3B.dips = 0;
+        g_vkWorkerContexts[w].stat_r.s_dynamic_4B.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_4B.dips = 0;
+    }
+}
+
+static void vk_PrintMtDiagAndReset(const char* passName, uint32_t workerCount, u64 sortTicks, u64 joinTicks, u64 executeTicks)
+{
+    if (!g_vkMtDiagEnabled) return;
+    LARGE_INTEGER freq; QueryPerformanceFrequency(&freq);
+    auto ms = [&](u64 ticks){ return 1000.0 * (double)ticks / (double)freq.QuadPart; };
+    for (u32 w = 0; w < workerCount; ++w)
+    {
+        auto& c = g_vkWorkerContexts[w];
+        Msg("VK MT DIAG [%s] f%u W%u/%u: record=%.3fms lockWait[desc=%.3fms pipe=%.3fms] calls[desc=%u unif=%u pipeHit=%u pipeMiss=%u pipeCompile=%u]",
+            passName, Device.dwFrame, w, workerCount, ms(c.diag_recordTicks),
+            ms(c.diag_lockWaitTicks_desc), ms(c.diag_lockWaitTicks_pipe),
+            c.diag_descCalls, c.diag_uniformCalls, c.diag_pipeHits, c.diag_pipeMisses, c.diag_pipeCompiles);
+        c.diag_recordTicks = c.diag_lockWaitTicks_desc = c.diag_lockWaitTicks_pipe = 0;
+        c.diag_descCalls = c.diag_uniformCalls = c.diag_pipeHits = c.diag_pipeMisses = c.diag_pipeCompiles = 0;
+    }
+    Msg("VK MT DIAG [%s] f%u: workers=%u sort=%.3fms join=%.3fms execute=%.3fms",
+        passName, Device.dwFrame, workerCount, ms(sortTicks), ms(joinTicks), ms(executeTicks));
+}
 
 static void vk_SetupGBufferSecondaryInheritance(
     CRenderTarget* Target,
@@ -450,6 +522,124 @@ static void GBufferStaticWorker(LPVOID lpvParams)
     vkEndCommandBuffer(sec);
 }
 
+struct GBufferDynamicWorkerParams
+{
+    uint32_t workerId;
+    uint32_t frameSlot;
+    uint32_t priority;
+    uint32_t passBegin;
+    uint32_t passEnd;
+    uint32_t packetBegin;
+    uint32_t packetEnd;
+    CRenderTarget* target;
+    CDSGraphManager* dsgraph;
+};
+
+static void GBufferDynamicWorker(LPVOID lpvParams)
+{
+    GBufferDynamicWorkerParams* p = (GBufferDynamicWorkerParams*)lpvParams;
+    const uint32_t w = p->workerId;
+    const uint32_t frameSlot = p->frameSlot;
+    VkCommandBuffer sec = HW.m_vkGBufferDynWorkerSecondary[frameSlot][w];
+    VkCommandPool pool = HW.m_vkGBufferDynWorkerPools[frameSlot][w];
+    CRenderTarget* Target = p->target;
+    VkRecordContext* ctx = &g_vkWorkerContexts[w];
+    ctx->workerId = w + 1;
+    g_vkWorkerId = w + 1;
+
+    VkRecordContext* prevCtx = RCache.m_ctx;
+    RCache.m_ctx = ctx;
+
+    LARGE_INTEGER wStart; if (g_vkMtDiagEnabled) QueryPerformanceCounter(&wStart);
+
+    for (int i = 0; i < 4; ++i)
+        ctx->pRT[i] = g_vkPrimaryContext.pRT[i];
+    ctx->pZB              = g_vkPrimaryContext.pZB;
+    ctx->blend_enable     = g_vkPrimaryContext.blend_enable;
+    ctx->blend_src        = g_vkPrimaryContext.blend_src;
+    ctx->blend_dst        = g_vkPrimaryContext.blend_dst;
+    ctx->blend_op         = g_vkPrimaryContext.blend_op;
+    ctx->blend_src_alpha  = g_vkPrimaryContext.blend_src_alpha;
+    ctx->blend_dst_alpha  = g_vkPrimaryContext.blend_dst_alpha;
+    ctx->blend_op_alpha   = g_vkPrimaryContext.blend_op_alpha;
+    ctx->colorwrite_mask  = g_vkPrimaryContext.colorwrite_mask;
+    ctx->alpha_ref        = g_vkPrimaryContext.alpha_ref;
+    ctx->z_enable         = g_vkPrimaryContext.z_enable;
+    ctx->z_write_enable   = g_vkPrimaryContext.z_write_enable;
+    ctx->z_func           = g_vkPrimaryContext.z_func;
+    ctx->cull_mode        = g_vkPrimaryContext.cull_mode;
+    ctx->stencil_enable   = g_vkPrimaryContext.stencil_enable;
+    ctx->stencil_func     = g_vkPrimaryContext.stencil_func;
+    ctx->stencil_ref      = g_vkPrimaryContext.stencil_ref;
+    ctx->stencil_mask     = g_vkPrimaryContext.stencil_mask;
+    ctx->stencil_writemask= g_vkPrimaryContext.stencil_writemask;
+    ctx->stencil_fail     = g_vkPrimaryContext.stencil_fail;
+    ctx->stencil_pass     = g_vkPrimaryContext.stencil_pass;
+    ctx->stencil_zfail    = g_vkPrimaryContext.stencil_zfail;
+
+    ctx->ctable = nullptr;
+    ctx->xforms.unmap();
+    ctx->hemi.unmap();
+    ctx->tree.unmap();
+    for (int i = 0; i < CBackend::MaxCBuffers; ++i)
+    {
+        ctx->m_aVertexConstants[i]   = 0;
+        ctx->m_aPixelConstants[i]    = 0;
+        ctx->m_aGeometryConstants[i] = 0;
+    }
+    ctx->needsViewProjSeed = true;
+
+    ctx->vs = nullptr;
+    ctx->ps = nullptr;
+    ctx->gs = nullptr;
+    ctx->cs = nullptr;
+    ctx->decl = nullptr;
+    ctx->state = nullptr;
+    ctx->T = nullptr;
+    ctx->vb = nullptr;
+    ctx->ib = nullptr;
+    ctx->vb_stride = 0;
+    ctx->m_pipelineDirty = true;
+    ctx->m_texturesDirty = true;
+
+    vkResetCommandPool(HW.m_vkDevice, pool, 0);
+
+    VkCommandBufferInheritanceRenderingInfo inheritanceInfo{};
+    VkFormat colorFormats[2] = {};
+    VkCommandBufferInheritanceInfo inheritance{};
+    VkCommandBufferBeginInfo beginInfo{};
+    vk_SetupGBufferSecondaryInheritance(Target, inheritanceInfo, colorFormats, inheritance, beginInfo);
+
+    vkBeginCommandBuffer(sec, &beginInfo);
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = (float)Target->get_height();
+    viewport.width = (float)Target->get_width();
+    viewport.height = -(float)Target->get_height();
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(sec, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = {Target->get_width(), Target->get_height()};
+    vkCmdSetScissor(sec, 0, 1, &scissor);
+
+    g_vkCmdSetFrontFace(sec, VK_FRONT_FACE_CLOCKWISE);
+
+    g_vkRecordingSecondaryGBuffer = true;
+    RCache.SetActiveCommandBuffer(sec);
+
+    p->dsgraph->r_dsgraph_render_dynamic_range(p->priority, p->passBegin, p->passEnd, p->packetBegin, p->packetEnd);
+
+    g_vkRecordingSecondaryGBuffer = false;
+    RCache.m_ctx = prevCtx;
+    g_vkWorkerId = 0;
+    if (g_vkMtDiagEnabled) { LARGE_INTEGER wEnd; QueryPerformanceCounter(&wEnd); ctx->diag_recordTicks = (u64)(wEnd.QuadPart - wStart.QuadPart); }
+    vkEndCommandBuffer(sec);
+}
+
 // ── Render — master per-frame driver ─────────────────────────────────────────
 void CRender::Render()
 {
@@ -605,60 +795,8 @@ void CRender::Render()
                 RCache.m_ctx = &g_vkPrimaryContext;
                 RCache.SetActiveCommandBuffer(cmd);
 
-                // 5. Aggregate worker stats — IMPORTANT: loop bound is `workerCount` (this
-                //    frame's actual dispatch count), NOT CHW::VK_GBUFFER_WORKERS. Contexts
-                //    are persistent globals; if workerCount varies frame-to-frame (e.g. a
-                //    scene dips below the MT threshold), stale higher-index contexts must
-                //    NOT be re-aggregated/re-reset here.
-                for (uint32_t w = 0; w < workerCount; ++w)
-                {
-                    g_vkPrimaryContext.s_sets_built  += g_vkWorkerContexts[w].s_sets_built;
-                    g_vkPrimaryContext.s_sets_reused += g_vkWorkerContexts[w].s_sets_reused;
-                    g_vkPrimaryContext.s_binds       += g_vkWorkerContexts[w].s_binds;
-                    g_vkPrimaryContext.diag_pipeHits += g_vkWorkerContexts[w].diag_pipeHits;
-                    g_vkPrimaryContext.diag_pipeMisses += g_vkWorkerContexts[w].diag_pipeMisses;
-                    g_vkPrimaryContext.diag_pipeCompiles += g_vkWorkerContexts[w].diag_pipeCompiles;
-                    RCache.stat.vs                   += g_vkWorkerContexts[w].stat_vs;
-                    RCache.stat.ps                   += g_vkWorkerContexts[w].stat_ps;
-
-                    RCache.stat.r.s_static.verts += g_vkWorkerContexts[w].stat_r.s_static.verts;
-                    RCache.stat.r.s_static.dips  += g_vkWorkerContexts[w].stat_r.s_static.dips;
-                    RCache.stat.r.s_flora.verts += g_vkWorkerContexts[w].stat_r.s_flora.verts;
-                    RCache.stat.r.s_flora.dips  += g_vkWorkerContexts[w].stat_r.s_flora.dips;
-                    RCache.stat.r.s_flora_lods.verts += g_vkWorkerContexts[w].stat_r.s_flora_lods.verts;
-                    RCache.stat.r.s_flora_lods.dips  += g_vkWorkerContexts[w].stat_r.s_flora_lods.dips;
-                    RCache.stat.r.s_details.verts += g_vkWorkerContexts[w].stat_r.s_details.verts;
-                    RCache.stat.r.s_details.dips  += g_vkWorkerContexts[w].stat_r.s_details.dips;
-                    RCache.stat.r.s_dynamic.verts += g_vkWorkerContexts[w].stat_r.s_dynamic.verts;
-                    RCache.stat.r.s_dynamic.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic.dips;
-                    RCache.stat.r.s_dynamic_sw.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_sw.verts;
-                    RCache.stat.r.s_dynamic_sw.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_sw.dips;
-                    RCache.stat.r.s_dynamic_inst.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_inst.verts;
-                    RCache.stat.r.s_dynamic_inst.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_inst.dips;
-                    RCache.stat.r.s_dynamic_1B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_1B.verts;
-                    RCache.stat.r.s_dynamic_1B.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_1B.dips;
-                    RCache.stat.r.s_dynamic_2B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_2B.verts;
-                    RCache.stat.r.s_dynamic_2B.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_2B.dips;
-                    RCache.stat.r.s_dynamic_3B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_3B.verts;
-                    RCache.stat.r.s_dynamic_3B.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_3B.dips;
-                    RCache.stat.r.s_dynamic_4B.verts += g_vkWorkerContexts[w].stat_r.s_dynamic_4B.verts;
-                    RCache.stat.r.s_dynamic_4B.dips  += g_vkWorkerContexts[w].stat_r.s_dynamic_4B.dips;
-
-                    g_vkWorkerContexts[w].s_sets_built = g_vkWorkerContexts[w].s_sets_reused = g_vkWorkerContexts[w].s_binds = 0;
-                    g_vkWorkerContexts[w].diag_pipeHits = g_vkWorkerContexts[w].diag_pipeMisses = g_vkWorkerContexts[w].diag_pipeCompiles = 0;
-                    g_vkWorkerContexts[w].stat_vs = g_vkWorkerContexts[w].stat_ps = 0;
-                    g_vkWorkerContexts[w].stat_r.s_static.verts = g_vkWorkerContexts[w].stat_r.s_static.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_flora.verts = g_vkWorkerContexts[w].stat_r.s_flora.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_flora_lods.verts = g_vkWorkerContexts[w].stat_r.s_flora_lods.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_details.verts = g_vkWorkerContexts[w].stat_r.s_details.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic.verts = g_vkWorkerContexts[w].stat_r.s_dynamic.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_sw.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_sw.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_inst.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_inst.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_1B.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_1B.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_2B.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_2B.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_3B.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_3B.dips = 0;
-                    g_vkWorkerContexts[w].stat_r.s_dynamic_4B.verts = g_vkWorkerContexts[w].stat_r.s_dynamic_4B.dips = 0;
-                }
+                // 5. Aggregate worker stats
+                vk_AggregateAndResetWorkerStats(workerCount);
 
                 // 6. Execute all secondaries IN CHUNK ORDER — chunk order == ascending
                 //    worker index == the order the sorted queue was sliced in. This must
@@ -677,23 +815,7 @@ void CRender::Render()
                 for (u32 iPass = 0; iPass < SHADER_PASSES_MAX; ++iPass)
                     GMBase.RGraph.mapStaticPasses[0][iPass].clear();
 
-                if (g_vkMtDiagEnabled)
-                {
-                    LARGE_INTEGER freq; QueryPerformanceFrequency(&freq);
-                    auto ms = [&](u64 ticks){ return 1000.0 * (double)ticks / (double)freq.QuadPart; };
-                    for (u32 w = 0; w < workerCount; ++w)
-                    {
-                        auto& c = g_vkWorkerContexts[w];
-                        Msg("VK MT DIAG f%u W%u/%u: record=%.3fms lockWait[desc=%.3fms pipe=%.3fms] calls[desc=%u unif=%u pipeHit=%u pipeMiss=%u pipeCompile=%u]",
-                            Device.dwFrame, w, workerCount, ms(c.diag_recordTicks),
-                            ms(c.diag_lockWaitTicks_desc), ms(c.diag_lockWaitTicks_pipe),
-                            c.diag_descCalls, c.diag_uniformCalls, c.diag_pipeHits, c.diag_pipeMisses, c.diag_pipeCompiles);
-                        c.diag_recordTicks = c.diag_lockWaitTicks_desc = c.diag_lockWaitTicks_pipe = 0;
-                        c.diag_descCalls = c.diag_uniformCalls = c.diag_pipeHits = c.diag_pipeMisses = c.diag_pipeCompiles = 0;
-                    }
-                    Msg("VK MT DIAG f%u: workers=%u sort=%.3fms join=%.3fms execute=%.3fms",
-                        Device.dwFrame, workerCount, ms(sortTicks), ms(joinTicks), ms(executeTicks));
-                }
+                vk_PrintMtDiagAndReset("Static", workerCount, sortTicks, joinTicks, executeTicks);
             }
             else
             {
@@ -746,12 +868,87 @@ void CRender::Render()
             vkCmdEndRendering(cmd);
             Target->m_bRenderingPassActive = false;
         }
-        Target->phase_scene_begin(); // Re-open LOAD_OP_LOAD pass
+
+        const uint32_t frameSlot = HW.m_vkCurrentFrame % CHW::MAX_FRAMES_IN_FLIGHT;
+        const bool bMtRecord = !!strstr(Core.Params, "-vk_mt_record");
+        const u32 countDyn0 = (u32)GMBase.RGraph.mapDynamicPasses[0][0].size();
+        const u32 countDyn1 = (u32)GMBase.RGraph.mapDynamicPasses[0][1].size();
+        const u32 totalDynPackets = countDyn0 + countDyn1;
+        constexpr u32 kMinDynPacketsPerWorker = 16;
+        const u32 hwWorkers = ttapi_GetWorkersCount();
+        const u32 maxWorkers = _min(hwWorkers, CHW::VK_GBUFFER_WORKERS);
+        const u32 workerCountDyn = _min(maxWorkers, _max(1u, totalDynPackets / kMinDynPacketsPerWorker));
+        const bool canUseMTDynamic = bMtRecord && (maxWorkers >= 2) && (workerCountDyn >= 2) && (totalDynPackets >= kMinDynPacketsPerWorker * 2);
+
+        Target->phase_scene_begin(canUseMTDynamic ? VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT : 0);
 
         if (rperf) tg.Start();
         {
-            vk_ScopedPass passDynamic(cmd, "Dynamic Geometry", vk_colors::GBuffer);
-            GMBase.r_dsgraph_render_dynamic(0);
+            if (canUseMTDynamic)
+            {
+                vk_ScopedPass passDynamic(cmd, "Dynamic Geometry (MT Secondary)", vk_colors::GBuffer);
+
+                u64 sortTicks = 0, joinTicks = 0, executeTicks = 0;
+                LARGE_INTEGER t0, t1;
+
+                if (g_vkMtDiagEnabled) QueryPerformanceCounter(&t0);
+                for (u32 iPass = 0; iPass < SHADER_PASSES_MAX; ++iPass)
+                {
+                    auto& queue = GMBase.RGraph.mapDynamicPasses[0][iPass];
+                    if (!queue.empty())
+                    {
+                        if (queue.size() < 4096)
+                            std::sort(queue.begin(), queue.end());
+                        else
+                            xr_parallel_sort(queue.begin(), queue.end());
+                    }
+                }
+                if (g_vkMtDiagEnabled) { QueryPerformanceCounter(&t1); sortTicks = (u64)(t1.QuadPart - t0.QuadPart); }
+
+                GBufferDynamicWorkerParams params[CHW::VK_GBUFFER_WORKERS];
+                const u32 baseChunk = totalDynPackets / workerCountDyn;
+                const u32 remainder = totalDynPackets % workerCountDyn;
+                u32 cursor = 0;
+                for (u32 w = 0; w < workerCountDyn; ++w)
+                {
+                    const u32 chunkSize = baseChunk + (w < remainder ? 1 : 0);
+                    const u32 start = cursor;
+                    const u32 end = cursor + chunkSize;
+                    cursor = end;
+
+                    u32 passBegin, passEnd, packetBegin, packetEnd;
+                    vk_ResolveStaticRange(start, end, countDyn0, passBegin, passEnd, packetBegin, packetEnd);
+                    params[w] = { w, frameSlot, 0, passBegin, passEnd, packetBegin, packetEnd, Target, &GMBase };
+                }
+
+                if (g_vkMtDiagEnabled) QueryPerformanceCounter(&t0);
+                for (u32 w = 0; w < workerCountDyn; ++w)
+                    ttapi_AddWorker(GBufferDynamicWorker, &params[w]);
+                ttapi_RunAllWorkers();
+                if (g_vkMtDiagEnabled) { QueryPerformanceCounter(&t1); joinTicks = (u64)(t1.QuadPart - t0.QuadPart); }
+
+                RCache.m_ctx = &g_vkPrimaryContext;
+                RCache.SetActiveCommandBuffer(cmd);
+
+                vk_AggregateAndResetWorkerStats(workerCountDyn);
+
+                if (g_vkMtDiagEnabled) QueryPerformanceCounter(&t0);
+                VkCommandBuffer secs[CHW::VK_GBUFFER_WORKERS];
+                for (u32 w = 0; w < workerCountDyn; ++w)
+                    secs[w] = HW.m_vkGBufferDynWorkerSecondary[frameSlot][w];
+                vkCmdExecuteCommands(cmd, workerCountDyn, secs);
+                if (g_vkMtDiagEnabled) { QueryPerformanceCounter(&t1); executeTicks = (u64)(t1.QuadPart - t0.QuadPart); }
+
+                for (u32 iPass = 0; iPass < SHADER_PASSES_MAX; ++iPass)
+                    GMBase.RGraph.mapDynamicPasses[0][iPass].clear();
+
+                vk_PrintMtDiagAndReset("Dynamic", workerCountDyn, sortTicks, joinTicks, executeTicks);
+            }
+            else
+            {
+                vk_ScopedPass passDynamic(cmd, "Dynamic Geometry", vk_colors::GBuffer);
+                GMBase.r_dsgraph_render_dynamic(0);
+            }
         }
         if (rperf) msDyn = tg.GetElapsed_sec()*1000.f;
         // Target->disable_aniso();
